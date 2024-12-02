@@ -1,0 +1,2335 @@
+---
+title: "Suivi des lacs - Résultats du suivi 2023"
+output: 
+  flexdashboard::flex_dashboard:
+    orientation : rows
+
+---
+```{r}
+# A CHOISIR
+p <- 2023 # Année
+nom <- "Anterne" # lac
+
+lac_avec_capteur_O2 <- c("Anterne","Arpont","Aumar","Bramant","Bresses inférieur","Bresses supérieur","Brévent","Corne","Cornu","Cos","Izourt","Jovet","Lauzanier","Merlet Supérieur","Mont Coua","Muzelle","Noir du Carro","Pétarel","Pisses","Plan Vianney","Pormenaz","Rabuons")
+```
+
+
+```{r global}
+# install.packages("ggplot2","shiny","data.table","flexdashboard","png","plotrix","RColorBrewer", "stringr")
+# Packages à charger
+pacman::p_load(ggplot2, shiny, png, flexdashboard, plotrix, RColorBrewer, data.table, stringr,lubridate, tidyverse, gghighlight)
+
+debut <- "N:/Projets/Reseau-lacs-sentinelles/Donnees/"
+debut_chemin <- "N:/Projets/Reseau-lacs-sentinelles/Donnees/Donnees_script/"
+debut_chemin_HF <- "N:/Projets/Reseau-lacs-sentinelles/Donnees/Donnees-HF/"
+
+#Importer les images
+imgaut<-readPNG(paste0(debut_chemin,"pictos/automne.png"),TRUE)
+imghiver<-readPNG(paste0(debut_chemin,"pictos/hiver.png"),TRUE)
+imgprint<-readPNG(paste0(debut_chemin, "pictos/printemps.png"),TRUE)
+imgete<-readPNG(paste0(debut_chemin, "pictos/ete.png"),TRUE)
+imgtemp<-readPNG(paste0(debut_chemin, "Logos/temperature.png"),TRUE)
+imgpH<-readPNG(paste0(debut_chemin, "Logos/pH.png"),TRUE)
+imgox<-readPNG(paste0(debut_chemin, "Logos/oxygene.png"),TRUE)
+imgchimie<-readPNG(paste0(debut_chemin, "Logos/chimie.png"),TRUE)
+imgphyto<-readPNG(paste0(debut_chemin, "Logos/phytoplancton.png"),TRUE)
+imgzoo<-readPNG(paste0(debut_chemin, "Logos/zooplancton.png"),TRUE)
+
+chemin_corresp <- list.files(paste0(debut_chemin,"correspondance_classe_taxon/"))
+classe_phyto <- read.csv2(paste0(debut_chemin,"correspondance_classe_taxon/corresp_taxon_phyto.csv"), fileEncoding = "Latin1",encoding ="UTF8")
+classe_zoo <- read.csv2(paste0(debut_chemin,"correspondance_classe_taxon/corresp_taxon_zoo.csv"), fileEncoding = "Latin1", encoding ="UTF8")
+caracteristiques_lacs <- read.csv2(paste0(debut_chemin,"caracteristiques_lacs.csv"), fileEncoding = "Latin1", encoding ="UTF8")
+
+# Données depuis 2014
+chemin_chloroa <- paste0(debut_chemin,"chloro/")
+chemin_sonde <- paste0(debut_chemin,"sondes/")
+chemin_condi <- paste0(debut_chemin,"conditions_p/")
+chemin_HF <- paste0(debut_chemin_HF,"2023-pour_script/")
+chemin_zoo <- paste0(debut_chemin,"zooP/")
+chemin_phyto <- paste0(debut_chemin,"phytoP/")
+chemin_chimie <- paste0(debut_chemin,"chimie/") 
+
+# Importer les fichiers
+fichiers_condi = list.files(chemin_condi)
+fichiers_sonde = list.files(chemin_sonde)
+fichiers_HF = list.files(chemin_HF)
+fichiers_chloroa = list.files(chemin_chloroa)
+fichiers_chimie = list.files(chemin_chimie)
+fichiers_phyto = list.files(chemin_phyto)
+fichiers_zoo = list.files(chemin_zoo)
+
+
+## REGROUPER les fichiers 2014 -> 2019
+# Regrouper les fichiers sonde
+test <- list()
+for (i in 1:length(fichiers_sonde)) {
+test[[i]]<-rbind.data.frame(read.csv(paste(chemin_sonde,fichiers_sonde[i],sep=""),header=TRUE,sep=";", fileEncoding = "Latin1", encoding ="UTF8"))
+}
+sonde <- rbindlist(test, fill =TRUE)
+   
+# Regroupe les fichiers conditions
+test_c<-list()
+for (i in 1:length(fichiers_condi)) {
+test_c[[i]]<-rbind.data.frame(read.csv(paste(chemin_condi,fichiers_condi[i],sep=""),header=TRUE,sep=";", fileEncoding = "Latin1", encoding ="UTF8"))
+}
+cond_p<-rbindlist(test_c) 
+
+#Regroupe les fichiers chloro
+testchloro<-list()
+for (i in 1:length(fichiers_chloroa)) {
+  testchloro[[i]]<-rbind.data.frame(read.csv(paste(chemin_chloroa,fichiers_chloroa[i],sep=""),header=TRUE,sep=";", fileEncoding = "Latin1", encoding ="UTF8"))
+}
+chloro<-rbindlist(testchloro)
+    
+# REGROUPER les fichiers températures HF
+test_temp<-list()
+for (i in 1:length(fichiers_HF)) {
+  test_temp[[i]]<-rbind.data.frame(read.csv(paste(chemin_HF,fichiers_HF[i],sep=""),header=TRUE,sep=";", fileEncoding = "Latin1", encoding ="UTF8"))
+}
+temp_HF <- rbindlist(test_temp, fill=T)
+temp_HF <- type.convert(temp_HF, as.is = TRUE) # convertir (ici les colonnes en numéric)
+
+# REGROUPER les fichiers Phyto
+testphyto <- list()
+for (i in 1:length(fichiers_phyto)) {
+  testphyto[[i]] <- rbind.data.frame(read.csv(paste(chemin_phyto,fichiers_phyto[i],sep=""),header=TRUE,sep=";", fileEncoding = "Latin1", encoding ="UTF8"))
+}
+phyto <- rbindlist(testphyto)
+
+# REGROUPERles fichiers ZOO
+testzoo<-list()
+for (i in 1:length(fichiers_zoo)) {
+  testzoo[[i]]<-rbind.data.frame(read.csv(paste(chemin_zoo,fichiers_zoo[i],sep=""),header=TRUE,sep=";", fileEncoding = "Latin1", encoding ="UTF8"))
+}
+zoo<-rbindlist(testzoo)
+
+# Regrouper les fichiers chimie
+testc<-list()
+for (i in 1:length(fichiers_chimie)) {
+testc[[i]]<-rbind.data.frame(read.csv(paste(chemin_chimie,fichiers_chimie[i],sep=""),header=TRUE,sep=";", fileEncoding = "Latin1", encoding ="UTF8"))
+}
+chimie <- rbindlist(testc, fill=T)
+
+
+######## IMPORTANT : Importer les tableaux issus du script comparaison des lacs ####################################### ---- (Il faut avoir fait tourner l'autre script avant)
+
+tab_comparaison_base <- read.csv2(paste0(debut_chemin,"tab_comparaison_base_2014-2023.csv"), stringsAsFactors=F, dec=".", fileEncoding = "Latin1", encoding ="UTF8") 
+
+tab_comparaison_plancton <- read.csv2(paste0(debut_chemin,"tab_comparaison_plancton_2014-2023.csv"), stringsAsFactors=F , dec=".", fileEncoding = "Latin1", encoding ="UTF8") 
+
+tab_comparaison_chimie <- read.csv2(paste0(debut_chemin,"tab_comparaison_chimie_2014-2023.csv"), stringsAsFactors=F, dec=".", fileEncoding = "Latin1", encoding ="UTF8") 
+
+# données HF - pour l'instant 2 tableaux tant qu'on n'a pas fini chaud
+tab_comparaison_HF <- read.csv2(paste0(debut_chemin,"tab_comparaison_HF_chaud-2014-2023.csv"), stringsAsFactors=F , dec=".", fileEncoding = "Latin1", encoding ="UTF8") #, sep = ",") # vient du projet CHAUD
+tab_comparaison_HF_O2 <- read.csv2(paste0(debut_chemin,"tab_comparaison_HF_2014-2023.csv"), stringsAsFactors=F, dec=".", fileEncoding = "Latin1", encoding ="UTF8") # tableau qui utilsie l'ancien script - à utilsier que pour les données O2
+
+## /!\ voir pour la mise en forme - A VOIR (rechercher " A_VOIR dans barre de recherche !)
+
+# Préparation du tableau de comparaison
+tab_comparaison_base$année <- as.factor(tab_comparaison_base$année)
+tab_comparaison_HF$Annee <- as.factor(tab_comparaison_HF$Annee)
+tab_comparaison_HF_O2$année  <- as.factor(tab_comparaison_HF_O2$année)
+tab_comparaison_plancton$année <- as.factor(tab_comparaison_plancton$année)
+tab_comparaison_chimie$année <- as.factor(tab_comparaison_chimie$année)
+
+# Tableau pour le lac choisi
+tab_comparaison_base_lac <- subset(tab_comparaison_base, tab_comparaison_base$Lac == nom)
+tab_comparaison_HF_lac <- subset(tab_comparaison_HF, tab_comparaison_HF$Lac == nom)
+tab_comparaison_HF_O2_lac <- subset(tab_comparaison_HF_O2, tab_comparaison_HF_O2$Lac == nom)
+tab_comparaison_plancton_lac <- subset(tab_comparaison_plancton, tab_comparaison_plancton$Lac == nom)
+tab_comparaison_chimie_lac <- subset(tab_comparaison_chimie, tab_comparaison_chimie$Lac == nom)
+
+
+# données en numérique
+for (i in (4:16)) {
+  tab_comparaison_base_lac[,i] <- as.numeric(tab_comparaison_base_lac[,i])
+}
+
+
+# Tableau pour l'année 
+tab_comparaison_base_lac_2020 <- subset(tab_comparaison_base_lac, tab_comparaison_base_lac$année == p)
+tab_comparaison_HF_lac_2020 <- subset(tab_comparaison_HF_lac, tab_comparaison_HF_lac$Annee == p)
+tab_comparaison_HF_O2_lac_2020 <- subset(tab_comparaison_HF_O2_lac, tab_comparaison_HF_O2_lac$année == p)
+tab_comparaison_plancton_lac_2020 <- subset(tab_comparaison_plancton_lac, tab_comparaison_plancton_lac$année == p)
+tab_comparaison_chimie_lac_2020 <- subset(tab_comparaison_chimie_lac, tab_comparaison_chimie_lac$année == p)
+```
+
+```{r info_lac}
+# Récap des infos sur le lac
+caracteristiques_lacs <- as.data.table(caracteristiques_lacs)
+infos_lacs <- caracteristiques_lacs[caracteristiques_lacs$Lac %in% nom]
+
+altitude <- as.numeric(infos_lacs$Altitude)   
+surface_lac <- as.numeric(infos_lacs$Superficie_lac)  
+surface_bv <- as.numeric(infos_lacs$Superficie_BV) 
+profondeur_max_lac <- as.numeric(infos_lacs$Prof.max)  # enlever as.numeric si problème et le mettre juste dans la partie prof_thermocline
+gel_hiver <- as.numeric(infos_lacs$Duree_glace) 
+gestion <- infos_lacs$Gestionnaire
+```
+
+
+Sidebar {.sidebar data-width=250}
+=====================================
+
+```{r logo, echo=FALSE, fig.height = 2, fig.width = 1, fig.align = "center"}
+logo <- paste0(debut_chemin, "Logos/reseau_LS.png")
+knitr::include_graphics(logo)
+```
+  
+**Lac : `r nom `**  
+ - Altitude : `r altitude `m  
+ - Surface du bassin versant : `r surface_bv ` ha  
+ - Surface du lac : `r surface_lac ` ha   
+ - Profondeur max : `r profondeur_max_lac` m   
+ - Durée de gel : `r gel_hiver ` mois   
+ - Gestion : `r gestion`
+ 
+
+```{r photo, echo=FALSE, fig.height = 3, fig.width = 2.4, fig.align = "center"}
+lien <- paste0(debut,"Photos_lac_rapport_monit/",nom,".png")
+knitr::include_graphics(lien)
+
+```
+
+```{r carto, echo=FALSE, fig.height = 6, fig.width = 2.4, fig.align = "center"}
+lien_carto <- paste0(debut,"carto/",nom,".png")
+knitr::include_graphics(lien_carto)
+
+```
+
+
+
+Métadonnées et profils de sonde
+=====================================
+
+Row {data-width=500}
+------------------------------------- 
+
+### **Profils de sonde**
+
+```{r classement_temp, include=FALSE}
+# est-ce utile ??? -> yes pour med_temps_surf
+
+# classer les lacs selon leur température en surface et en profondeur
+tempsurfacetot<-list()
+tabmoy<-list()
+tempproftot<-list()
+profmoy<-list()
+
+
+for(nomtest in unique (sonde$nom.du.site)){
+  top<-sonde[sonde$nom.du.site %in% nomtest]
+  tempsurface <- subset(top,top$profondeur.réelle.observée..m. < (1/8*(max(top$profondeur.réelle.observée..m.))))
+  tempsurfacetot<-rbind.data.frame(tempsurfacetot,tempsurface)
+  tt<-subset(tempsurfacetot,tempsurfacetot$nom.du.site==nomtest)
+  
+  moysur<-cbind.data.frame(nomtest,as.numeric(mean(tt$Température...c.,na.rm = TRUE)))
+  colnames(moysur)<-c("lac","Temperature")
+  
+  tabmoy<-rbind.data.frame(tabmoy,moysur)
+  colnames(tabmoy)<-c("lac","Temperature")
+  
+  ord<-as.data.frame(tabmoy[order(tabmoy$Temperature,decreasing=T),])
+  rownames(ord)<-c(1:nrow(ord))
+  
+  tempprof<-subset(top,top$profondeur.réelle.observée..m. == (max(top$profondeur.réelle.observée..m.)))
+  tempproftot<-rbind.data.frame( tempproftot,tempprof)
+  pp<-subset(tempproftot,tempproftot$nom.du.site==nomtest)
+  moyprof<-cbind.data.frame(nomtest, mean(pp$Température...c.,na.rm = TRUE))
+  colnames(moyprof)<-c("lac","Temperature")
+  
+  profmoy<-rbind.data.frame(profmoy,moyprof)
+  colnames(profmoy)<-c("lac","Temperature")
+  ordprof<-as.data.frame(profmoy[order(profmoy$Temperature, decreasing=T),])
+  rownames(ordprof)<-c(1:nrow(ordprof))
+}
+
+med_temp_surf<-round(median(ord$Temperature, na.rm=TRUE),1) 
+med_temp_prof<-round(median(ordprof$Temperature, na.rm=TRUE),1) 
+```
+
+
+```{r profils_de_sonde_prep_donnee}
+
+annee <- p #2019 cette année
+septembre <- 09
+aout <- 08
+octobre <- 10
+
+# Sélection du lac et de l'année pour le fichier sonde
+sonde_nom <- sonde[sonde$nom.du.site %in% nom]
+sonde_2019_v1 <- subset(sonde_nom,year(as.Date(strptime(date.de.prélèvement, "%d/%m/%Y"))) == annee)  
+
+# seulement les données du mois de septembre ou aout ou octobre
+sonde_2019 <- subset(sonde_2019_v1,month(as.Date(strptime(date.de.prélèvement, "%d/%m/%Y"))) == septembre)
+if (nrow(sonde_2019)==0){
+  sonde_2019 <- subset(sonde_2019_v1,month(as.Date(strptime(date.de.prélèvement, "%d/%m/%Y"))) == aout)
+}
+if (nrow(sonde_2019)==0){
+  sonde_2019 <- subset(sonde_2019_v1,month(as.Date(strptime(date.de.prélèvement, "%d/%m/%Y"))) == octobre)
+}
+
+prof <- sonde_2019$profondeur.réelle.observée..m.
+temp <- sonde_2019$Température...c.
+temp_tout <- sonde_nom$Température...c. # toutes les années
+oxygene <- sonde_2019$oxygene.saturation....
+oxygene_tout <- sonde_nom$oxygene.saturation.... # toutes les années
+#oxygene <- sonde_2019$oxygene.mg..mg.l.
+#oxygene_tout <- sonde_nom$oxygene.mg..mg.l. # toutes les années
+pH <- sonde_2019$ph.tc..nounit.
+ph_tout <- sonde_nom$ph.tc..nounit. #toutes les années
+chloroprofil <-sonde_2019$chl.a..mg.m3
+
+# Sélection du lac et de l'année pour le fichier conditions de prélèvement
+cond_p_nom <- cond_p[cond_p$nom.du.site %in% nom]
+cond_p_2019 <- subset(cond_p_nom,year(as.Date(strptime(date.de.prélèvement, "%d/%m/%Y"))) == annee)  
+
+
+# --Calcul zone euphotique ---------------------------------------------------------------------------------
+transp <- cond_p_2019$transparence.par.secchi.20.cm
+if(is.na(transp)==FALSE){
+    euph <-  transp * 2.5
+    if (euph >= profondeur_max_lac){
+      euph <- profondeur_max_lac
+    }
+    zone_euph <- subset(sonde_2019, profondeur.réelle.observée..m.<= euph)
+  } else { euph <- NA
+    zone_euph <- subset(sonde_2019, profondeur.réelle.observée..m.<= (profondeur_max_lac-2) )}
+
+#-- Pic Chloro -------------------------------------------------------------
+    if ((nrow(sonde_2019)>= 1) & (is.na(sum(zone_euph$chl.a..mg.m3.))== FALSE) ) {
+    ligne_max_chloro <- subset(sonde_2019, chl.a..mg.m3.== max(sonde_2019$chl.a..mg.m3., na.rm=T))
+    ligne_max_chloro <- ligne_max_chloro[1,]
+    prof_pic_chloro <- as.numeric(ligne_max_chloro$profondeur.réelle.observée..m.)
+    } else {prof_pic_chloro <- NA}
+
+ 
+#-- Température -------------------------------------------------------------
+  if (nrow(sonde_2019)>= 1) { 
+    mint <- min(temp_tout, na.rm=T) # <- min(temp,na.rm=T) # toutes les années
+    maxt <- max(temp_tout,na.rm=T)
+    sdt <- sd(temp_tout,na.rm=T)
+    
+    # T année 2018
+    t_surf <- as.numeric(tab_comparaison_base_lac_2020$Temp.surface)
+    t_prof <- as.numeric(tab_comparaison_base_lac_2020$Temp.prof)
+    delta_temp <- round(t_surf-t_prof,1)
+  }else { delta_temp <- NA
+          t_surf <- 13.5
+          t_prof <- 13}
+    
+    
+#-- pH -------------------------------------------------------------
+ # min_ph<-subset(sonde_2019,ph.tc..nounit.==min(ph.tc..nounit., na.rm=T))
+ # min_ph <- min_ph[1,]
+ # max_ph<-subset(sonde_2019,ph.tc..nounit.==max(ph.tc..nounit., na.rm=T))
+ # max_ph<-max_ph[1,]
+ # delta_ph <-round(max_ph$ph.tc..nounit.-min_ph$ph.tc..nounit.,1)
+ if (nrow(sonde_2019)>= 1) { 
+  pHarr<-round(pH,2)
+  if((is.na(mean(pHarr,na.rm=T)))==FALSE){ 
+        # ph médian
+        ph_med <- round(median(pHarr),1)
+         # deltA ph
+        phsurface <- subset(sonde_2019,sonde_2019$profondeur.réelle.observée..m. < (1/8*(max(sonde_2019$profondeur.réelle.observée..m.))))
+        if (sum(phsurface$ph.tc..nounit.,na.rm = TRUE) != 0 ){
+          moy_ph_surf <- round(mean(phsurface$ph.tc..nounit.,na.rm = TRUE),2)
+        } else { moy_ph_surf <- NA
+        }
+        phprof <- subset(sonde_2019,sonde_2019$profondeur.réelle.observée..m. > ( 7/8* max(sonde_2019$profondeur.réelle.observée..m.)))
+        if (sum(phprof$ph.tc..nounit.,na.rm = TRUE) != 0 ){
+          moy_ph_prof <- round(mean(phprof$ph.tc..nounit.,na.rm = TRUE),2)
+        } else { moy_ph_prof  <- NA
+        } 
+      
+      delta_ph <- round(moy_ph_surf - moy_ph_prof ,1)
+      
+      if (delta_ph < 0 & delta_ph > -0.3){
+       delta_ph <- 0
+      }
+  }
+ }else { delta_ph <- NA}
+    
+  
+  # tous les lacs -
+  min_ph20lacs <-  max_ph20lacs <- c()
+  date_tab_comp <- as.Date(strptime(tab_comparaison_base_lac$année, "%Y"))
+  for (i in ((year(min(date_tab_comp,na.rm=T))):(year(max(date_tab_comp,na.rm=T))))){
+    ph_annee <- subset(tab_comparaison_base,tab_comparaison_base$année == i )
+    min_annee <- min(ph_annee$pH.médian, na.rm=TRUE) 
+    max_annee <- max(ph_annee$pH.médian, na.rm=TRUE) 
+    min_ph20lacs <- c(min_ph20lacs, min_annee)
+    max_ph20lacs <- c(max_ph20lacs, max_annee)
+  }
+  
+#-- O2 -------------------------------------------------------------
+  #tab_delta_ox<-data.frame()
+  if (nrow(sonde_2019) >0) {
+    min_ox <- subset(sonde_2019,oxygene.saturation....==min(oxygene.saturation...., na.rm=T))
+    min_ox<-min_ox[1,]
+    max_ox<-subset(sonde_2019,oxygene.saturation....==max(oxygene.saturation...., na.rm=T))
+    max_ox<-max_ox[1,]
+    delta_ox <- round(max_ox$oxygene.saturation.... - min_ox$oxygene.saturation....,1)
+    
+     # O2 en concentration 
+    mino2 <- round(min_ox$oxygene.mg..mg.l.,1)
+    maxo2 <- round(max_ox$oxygene.mg..mg.l.,1)
+    
+    
+    O2anox <- subset(sonde_2019, sonde_2019$oxygene.saturation.... < 5)
+    O2hypox <- subset(sonde_2019,sonde_2019$oxygene.saturation.... < 20)
+    
+  } else {min_ox <- max_ox <- delta_ox <- NA
+  }
+  
+```
+
+
+```{r profils_de_sonde_graphiques, echo = FALSE,  out.width='80%', fig.show = 'hold', fig.align="center" }
+
+# Séparer la fenetre graphique en 3     
+par(mfrow=c(1,3))
+date_sonde <- as.Date(strptime(sonde_nom$date.de.prélèvement, "%d/%m/%Y"))
+
+# --Température----------------------------------------------------------------  
+par(ann=F, mar=c(3.5, 4.5, 3.8, 3.5), cex.axis=1, font.axis=4)#marge=bas.gauche.haut.droit
+
+if((is.na(mean(temp,na.rm=T)))==FALSE){ 
+      plot(temp,prof,ylim=c(max(prof+1),0),xlim=c(mint-sdt-(mint-sdt-round(mint-sdt,2)),maxt+1), pch=".", adj=0.5, bty="l", axes=F)
+      if(is.na(transp)==FALSE){
+        rect(mint-sdt-(mint-sdt-round((mint-sdt),2)), euph,maxt+1,0,  border=NA, col="grey90")#gauche, en bas, C  droite, en haut
+        abline(h=euph, col="grey54", lty=2, lwd=2)#pour un trait
+     }
+      # tracer des autres années
+      for (i in (year(min(date_sonde,na.rm=T)):(year(max(date_sonde,na.rm=T))))) {
+        if (i != p) { # pour les années précedentes (toutes sauf 2018)
+          sonde_annee_i <- subset(sonde_nom,year(as.Date(strptime(date.de.prélèvement, "%d/%m/%Y"))) == i)   
+          prof_i<-  sonde_annee_i$profondeur.réelle.observée..m.
+          temp_i <-  sonde_annee_i$Température...c.
+          lines(temp_i, prof_i, col="grey", lty=1, lwd=1)
+        }
+      }
+    # tracer en bleu la courbe 2018
+      lines(temp, prof, col="#34ACD9", lty=1, lwd=3) 
+    
+    axis(side=2,pos=mint-sdt-(mint-sdt-round((mint-sdt),2)), col.axis="#313330", las=1)
+    axis(side=2,pos=mint-sdt-(mint-sdt-round((mint-sdt),2)),at=c(min(prof),max(prof)),labels=F ,lwd.tick=0, col.axis="#313330")#rajout ordonnées
+    axis(side=3,pos=0,col.axis="#313330")
+    axis(side=3,pos=0,at=c(mint-sdt-(mint-sdt-round(mint-sdt,2)),maxt),labels=F ,lwd.tick=0,ylab="Profondeur(m)",xlab="pH", col.axis="#313330")#rajout abscisses
+    mtext("profondeur (m)", side=2, line=2 ,at=max(prof)/2, cex=0.9, font=2, col="#313330")
+    
+    #Ecrire le delta en dessous du graphes
+    delta_temp_graph<-paste("deltatempérature =",delta_temp,"°C")
+    mtext(delta_temp_graph,side=1)
+
+  #Inscription de la zone euphotique sur le profil de température
+  if(is.na(euph) == FALSE){  
+    if(euph <= profondeur_max_lac){
+      text(x=(maxt+(mint-sdt-(mint-sdt-round(mint-sdt,2))))/2, y=euph/2,labels="zone euphotique", cex =0.9, font=2, col="grey54")
+    }
+    if(euph > profondeur_max_lac){
+      text(x=mint, y=1,xpd=T,labels="La zone euphotique \ns'étend sur toute la \ncolonne d'eau du lac",cex =0.8, font=2, col="grey54", adj=c(0,1.5))
+    }
+  }
+  
+  #Inscription de la profondeur du pic de chloro sur le profil de température
+  if (is.na(sum(zone_euph$chl.a..mg.m3.)) == FALSE){ 
+      points(ligne_max_chloro$Température...c., ligne_max_chloro$profondeur, pch="*", col="limegreen",cex=5)
+      text(ligne_max_chloro$Température...c., ligne_max_chloro$profondeur, labels="pic de \nproduction", cex=1, col="limegreen", adj=c(0.5,1.4), xpd=T)
+    }  
+  }
+    
+  if((is.na(mean(temp,na.rm=T)))==TRUE){ 
+    plot(rep(7,length(prof)),prof,ylim=c(profondeur_max_lac,0),xlim=c(0,40), pch=".", adj=0.5, bty="l", axes=F) 
+    points(1,2, col="white")
+    axis(side=2,pos=0,at=c(0,profondeur_max_lac), col.axis="#313330", las=1)
+    axis(side=3,pos=0,xlab="température", col.axis="#313330")
+    text(x=20,y=profondeur_max_lac/2,labels = "pas de données\n disponibles")
+    mtext("profondeur (m)", side=2, line=2, at=profondeur_max_lac/2, cex=0.9, font=2, col="#313330")
+  }
+
+par(mar=c(0, 0, 0,0))
+plot.window(c(0,10),c(0,10))
+rasterImage(imgtemp, xleft=-0.8, ybottom=9, xright=1, ytop=10, xpd=T)
+text(x=5,y=9.7, pos=3,labels="température (°C)", cex=1.5,  font=2,col="#313330", xpd=T)
+
+# ------pH----------------------------------------------------------------------------------------------------------
+par(ann=F, mar=c(3.5, 4.5, 3.8, 3.5), cex.axis=1, font.axis=4)#marge=bas.gauche.haut.droit
+pHarr<-round(pH,2)
+pHarr_tout <- round(ph_tout, 2)
+
+if((is.na(mean(pHarr,na.rm=T)))==FALSE){ 
+  plot(pHarr,prof,ylim=c(max(prof+1),0),xlim=c(min(pHarr_tout,na.rm=T)-sd(pHarr_tout,na.rm=T)-(min(pHarr_tout,na.rm=T)-sd(pHarr_tout,na.rm=T)-round((min(pHarr_tout,na.rm=T)-sd(pHarr_tout,na.rm=T)),2))-0.15,max(pHarr_tout,na.rm=T)+0.1), pch=".", adj=0.5, bty="l", axes=F)
+  
+  # tracer des autres années
+  for (i in (year(min(date_sonde,na.rm=T)):(year(max(date_sonde,na.rm=T))))) {
+     if (i != p) { # pour les années précedentes (toutes sauf 2018)
+       sonde_annee_i <- subset(sonde_nom,year(as.Date(strptime(date.de.prélèvement, "%d/%m/%Y"))) == i)   
+       prof_i<-  sonde_annee_i$profondeur.réelle.observée..m.
+       pH_i <-  sonde_annee_i$ph.tc..nounit.
+       lines(pH_i, prof_i, col="grey", lty=1, lwd=1)
+        }
+      }
+  # tracer de la courbe pour l'année 2018
+  lines(pHarr, prof, col="orange", lty=1, lwd=3)
+  
+  axis(side=2,pos=min(pHarr_tout,na.rm=T)-sd(pHarr_tout,na.rm=T)-(min(pHarr_tout,na.rm=T)-sd(pHarr_tout,na.rm=T)-round((min(pHarr_tout,na.rm=T)-sd(pHarr_tout,na.rm=T)),2))-0.15, col.axis="#313330", las=1)
+  axis(side=2,pos=min(pHarr_tout,na.rm=T)-sd(pHarr_tout,na.rm=T)-(min(pHarr_tout,na.rm=T)-sd(pHarr_tout,na.rm=T)-round((min(pHarr_tout,na.rm=T)-sd(pHarr_tout,na.rm=T)),2))-0.15,at=c(min(prof),max(prof)),labels=F ,lwd.tick=0, col.axis="#313330")#rajout ordonnées
+  axis(side=3,pos=0, col.axis="#313330",at=seq(round(min(pHarr_tout,na.rm=T)-sd(pHarr_tout,na.rm=T)-(min(pHarr_tout,na.rm=T)-sd(pHarr_tout,na.rm=T)-round((min(pHarr_tout,na.rm=T)-sd(pHarr_tout,na.rm=T)),2)),1)-0.1,round(max(pHarr_tout+0.1, na.rm=T),1),by=0.1))
+  axis(side=3,pos=0,at=c(min(pHarr_tout,na.rm=T)-sd(pHarr_tout,na.rm=T)-(min(pHarr_tout,na.rm=T)-sd(pHarr_tout,na.rm=T)-round(min(pHarr_tout,na.rm=T)-sd(pHarr_tout,na.rm=T),2))-0.15,max(pHarr_tout,na.rm=T)),labels=F ,lwd.tick=0,ylab="Profondeur(m)",xlab="pH", col.axis="#313330")#rajout abscisses
+  mtext("profondeur (m)", side=2, line=2, at=max(prof)/2, cex=0.9, font=2, col="#313330")
+  
+  #ajout du delta sur le graphe
+  delta_ph_phrase<-paste("deltapH =",delta_ph,"")
+  mtext(delta_ph_phrase,side=1)
+}
+
+if((is.na(mean(pH,na.rm=T)))==TRUE){
+  plot(rep(7,length(prof)),prof,ylim=c(profondeur_max_lac,0),xlim=c(0,14), col="white", pch=".", adj=0.5, bty="l", axes=F)  
+  points(1,2, col="white")
+  axis(side=2,pos=0,at=c(0,round(profondeur_max_lac,0)), col.axis="#313330", las=1)
+  axis(side=3,pos=0, col.axis="#313330")
+  text(x=6,y=profondeur_max_lac/2,labels = "pH :\n pas de données\n disponibles")
+  #mtext("profondeur (m)", side=2, line=2, at=profondeur_max_lac/2, cex=0.9, font=2, col="#313330")
+}
+par(mar=c(0, 0, 0,0 ))
+plot.window(c(0,10),c(0,10))
+rasterImage(imgpH, xleft=-0.8, ybottom=9, xright=1, ytop=10)
+text(x=5,y=9.7, pos=3,labels="pH", cex=1.5,  font=2,col="#313330")
+
+
+# -------O2 -------------------------------------------------------------------------------------------------------------------
+
+par(ann=F, mar=c(3.5, 4.5, 3.8, 3.5), cex.axis=1, font.axis=4)#marge=bas.gauche.haut.droit
+
+if((is.na(mean(oxygene,na.rm=T)))==FALSE){ 
+  plot(oxygene,prof,ylim=c(max(prof+1),0),xlim=c(round(min(oxygene_tout,na.rm=T)-sd(oxygene_tout,na.rm=T)-(min(oxygene_tout,na.rm=T)-sd(oxygene_tout,na.rm=T)-round((min(oxygene_tout,na.rm=T)-sd(oxygene_tout,na.rm=T)),2)),0)-1,max(oxygene_tout,na.rm=T)+1), pch=".", adj=0.5, bty="l", axes=F, main = "Oxygène :\n pas de données disponibles") 
+ 
+   # tracer des autres années
+  for (i in (year(min(date_sonde,na.rm=T)):(year(max(date_sonde,na.rm=T))))) {
+     if (i != p) { # pour les années précedentes (toutes sauf 2018)
+       sonde_annee_i <- subset(sonde_nom,year(as.Date(strptime(date.de.prélèvement, "%d/%m/%Y"))) == i)   
+       prof_i<-  sonde_annee_i$profondeur.réelle.observée..m.
+       ox_i <-  sonde_annee_i$oxygene.saturation....
+       lines(ox_i, prof_i, col="grey", lty=1, lwd=1)
+        }
+      }
+  # tracer de la courbe pour l'année 2018
+  lines(oxygene, prof, col="#4BAE32", lty=1, lwd=3)
+  
+  axis(side=2,pos=round(min(oxygene_tout,na.rm=T)-sd(oxygene_tout,na.rm=T)-(min(oxygene_tout,na.rm=T)-sd(oxygene_tout,na.rm=T)-round((min(oxygene_tout,na.rm=T)-sd(oxygene_tout,na.rm=T)),2)),0)-1, col.axis="#313330", las=1)  
+  axis(side=2,pos=round(min(oxygene_tout,na.rm=T)-sd(oxygene_tout,na.rm=T)-(min(oxygene_tout,na.rm=T)-sd(oxygene_tout,na.rm=T)-round((min(oxygene_tout,na.rm=T)-sd(oxygene_tout,na.rm=T)),2)),0)-1,at=c(min(prof),max(prof)),labels=F ,lwd.tick=0, col.axis="#313330")#rajout ordonnées
+  axis(side=3,pos=0,at=c(round(min(oxygene_tout,na.rm=T)-sd(oxygene_tout,na.rm=T)-(min(oxygene_tout,na.rm=T)-sd(oxygene_tout,na.rm=T)-round((min(oxygene_tout,na.rm=T)-sd(oxygene_tout,na.rm=T)),2)),0)-1,max(oxygene_tout,na.rm=T)+1),labels=F ,lwd.tick=0, col.axis="#313330")
+  axis(side=3,pos=0, col.axis="#313330")
+  mtext("profondeur (m)", side=2, line=2, at=max(prof)/2, cex=0.7, font=2, col="#313330")
+  
+  #ajout du delta sur le graphe
+  delta_ox_phrase<-paste("deltaO2 =",delta_ox,"%")
+  mtext(delta_ox_phrase,side=1)
+}
+
+if((is.na(mean(oxygene,na.rm=T)))==TRUE){ 
+  plot(rep(0,length(prof)),prof,ylim=c(profondeur_max_lac,0),xlim=c(0,12), pch=".", adj=0.5, bty="l", axes=F) 
+  points(1,2, col="white")
+  axis(side=2,pos=0,at=c(0,profondeur_max_lac), col.axis="#313330", las=1)
+  axis(side=3, col.axis="#313330")
+  text(x=5.5,y=profondeur_max_lac/2,labels = "Oxygène :\n pas de données\n disponibles")
+  mtext("profondeur (m)", side=2, line=2, at=max(prof)/2, cex=0.9, font=2, col="#313330")
+ 
+  
+}
+
+par(mar=c(0, 0, 0,0 ))
+plot.window(c(0,10),c(0,10))
+rasterImage(imgox, xleft=-0.4, ybottom=9, xright=1, ytop=10)
+text(x=5,y=9.7, pos=3,labels="oxygène (%)", cex=1.5,  font=2,col="#313330")
+
+```
+
+
+### Métadonnées et commentaire sur les profils de sonde `r p`
+```{r comm_date_meteo, echo = FALSE}
+date_mission <- cond_p_2019$date.de.prélèvement
+meteo <- cond_p_2019$ensoleillement
+if (meteo =="ensoleille"){
+  meteo <- "ensoleillé "
+}
+temps <- cond_p_2019$temps
+
+```
+**Date de la mission terrain :** `r date_mission`  
+**Météo :** `r meteo` et temps `r temps`
+
+```{r comm_temp_annee2018, echo = FALSE}
+# Commentaire température surface et profondeur
+if((is.na(mean(temp,na.rm=T)))==FALSE){ 
+  comm_general <- paste0("En surface, la température du lac était de ",round(t_surf,1),"°C (la médiane sur tous les lacs du réseau était de ",med_temp_surf,"°C). Au fond du lac, la température mesurée était de ",round(t_prof,1),"°C (la médiane sur tous les lacs : ",med_temp_prof,"°C.)")
+  
+  # commentaire thermocline 
+  prof_thermocline <- tab_comparaison_base_lac_2020$Prof.thermocline 
+  
+  if (is.na(prof_thermocline)==FALSE){
+    if (prof_thermocline < profondeur_max_lac - 1){
+      comm_thermocline <- paste0("La thermocline est située aux alentours de ",prof_thermocline,"m de profondeur. La variation de température entre le fond et la surface est de ",delta_temp,"°C.")
+    } else {comm_thermocline <-paste0("Il n'y a pas de thermocline observée dans le lac. La variation de température entre le fond et la surface est de ",delta_temp,"°C.")
+    }
+  }else {comm_thermocline <-paste0("Il n'y a pas de thermocline observée dans le lac. La variation de température entre le fond et la surface est de ",delta_temp,"°C.")
+  }
+} else{
+  comm_general <- "Pas de données disponibles cette année"
+  comm_thermocline <- ""
+}
+
+```
+
+**Profil de température :** `r comm_general`  
+`r comm_thermocline`  
+
+
+```{r comm_chloro_profil,  echo= FALSE}
+
+#commentaire chloro profil
+if (is.na(prof_pic_chloro) == FALSE){
+  if (is.na(prof_thermocline)==FALSE) {
+    if (prof_thermocline > prof_pic_chloro){
+      prof_pic <- paste0("Le pic de chlorophylle-a est situé à ",round(prof_pic_chloro,1),"m de profondeur, il est donc moins profond que la thermocline.")
+    }
+    if(prof_thermocline < prof_pic_chloro){
+      prof_pic <- paste0("Le pic de chlorophylle-a est situé à ",round(prof_pic_chloro,1),"m de profondeur, il est donc plus profond que la thermocline.")
+    }
+  }
+  if((is.na(prof_thermocline)==TRUE)){
+    prof_pic <- paste0("Le pic de chlorophylle-a est situé à",round(prof_pic_chloro,1),"m de profondeur.")
+  }
+}  else {   prof_pic <- paste(" ")
+}
+
+# à mettre que si profil de sonde chloro : **Chlorophylle-a :** `r prof_pic`
+```
+
+
+
+```{r comm_pH, echo =FALSE}
+if((is.na(mean(pHarr,na.rm=T)))==FALSE){ 
+  if(median(pHarr, na.rm=T) < 6 ){
+   comm_pH_1 <- paste0("Le pH est inférieur à 6, l'eau du lac est plutC4t acide.")
+  }
+  if((median(pHarr, na.rm=T)>=6)&(median(pHarr, na.rm=T)<=8)){
+    comm_pH_1 <- paste0("Le pH est compris entre 6 et 8, l'eau du lac est neutre.")
+  }
+  if(median(pHarr, na.rm=T)>=8){
+    comm_pH_1 <- paste0("Le pH est supérieur à  8, ce qui traduit une eau alcaline.")
+  }
+}else {comm_pH_1 <- paste("Pas de données disponibles cette année")
+}
+
+if((is.na(mean(pH,na.rm=T)))==FALSE){ #ajout d'un commentaire sur la forme du profil
+  if(delta_ph <= 0.4){
+    comm_pH <- paste0("Entre la profondeur et la surface, la variation de pH est minime (inférieure à 0.4). Le ph reste stable sur toute la colonne d'eau, la valeur médiane est de ",round(median(pHarr, na.rm=T),1),".")
+    }
+  if( delta_ph >0.4){
+    comm_pH <- paste0("Le pH médian sur toute la colonne d'eau est de ",round(median(pHarr, na.rm=T),1),". Entre la profondeur et la surface, le pH varie de ",delta_ph,".")
+  }
+}else {comm_pH <- paste("")
+}
+
+
+```
+
+**pH :** `r comm_pH_1` 
+`r comm_pH`
+
+
+```{r comm_o2, echo = FALSE }
+if((is.na(mean(oxygene,na.rm=T)))==FALSE){ 
+  if((nrow(O2anox)!=0) && (nrow(O2hypox)!=0)){
+    profanox<-min(O2anox$profondeur)
+    profhypox<-min(O2hypox$profondeur)
+    
+    comm_o2 <- paste0("Le jour de la mesure, le lac était hypoxique (déficit en oxygène dissous) à partir de ",round(profhypox,0)," mètres. Le lac était même anoxique vers ",round(profanox,0)," métres (absence quasi totale d'oxygène en profondeur). La variation d'oxygène dissous entre la surface et le fond du lac était de ",delta_ox,"%.")
+    }
+  if((nrow(O2hypox)!=0)&&nrow(O2anox)==0){
+    profhypox <- min(O2hypox$profondeur)
+    comm_o2 <- paste0("Le jour de la mesure, le lac était hypoxique, (déficit en oxygène dissous) à partir de ",round(profhypox,0)," mètres. La variation d'oxygène dissous entre la surface et le fond du lac était de ",delta_ox,"%.")
+  }
+  if((nrow(O2hypox)==0)&&nrow(O2anox)==0){
+    comm_o2 <- paste0("Le jour de la mesure, le lac n'atteignait pas le stade d'hypoxie et conservait dans sa colonne d'eau une concentration suffisante d'oxygène dissous. La variation d'oxygène dissous entre la surface et le fond du lac est de ",delta_ox,"%.")
+  } 
+} else { comm_o2 <-"Pas de données disponibles cette année"
+}
+```
+
+**Oxygène dissous:** `r comm_o2`  
+
+```{r comm_conductivite}
+conductivite <- round(tab_comparaison_base_lac_2020$Conductivité, 0)
+
+   # tous les lacs -
+  min_cond20lacs <-  max_cond20lacs <- c()
+  for (i in ((year(min(date_tab_comp,na.rm=T))):(year(max(date_tab_comp,na.rm=T))))){
+    cond_annee <- subset(tab_comparaison_base,tab_comparaison_base$année == i )
+    min_annee <- min(cond_annee$Conductivité, na.rm=TRUE) 
+    max_annee <- max(cond_annee$Conductivité, na.rm=TRUE) 
+    min_cond20lacs <- c(min_cond20lacs, min_annee)
+    max_cond20lacs <- c(max_cond20lacs, max_annee)
+  }
+  
+   if (is.na(conductivite) ==FALSE){
+    comm_conductivite  <- paste0("La conductivité moyenne dans toute la colonne d'eau est de ",conductivite," µS/cm.")
+  }else {comm_conductivite  <- "Pas de données disponibles cette année"}
+```
+
+**Conductivité :** `r comm_conductivite`    
+
+
+Row {data-width=500}{.tabset .tabset-fade} 
+-------------------------------------   
+### Température et oxygène
+
+
+```{r comp_indicateurs_temp , fig.show = "hold", out.width ="35%"}
+# Comparaison inter-année des températures et de la profondeur de la thermocline
+temp <- ggplot(tab_comparaison_base_lac, aes(x=année), width=4, height =4) +
+  geom_point(aes(y= Temp.surface), color='steelblue1', shape= 16, size = 3) + 
+  geom_point(aes(y= Temp.prof), color='steelblue4', shape= 16, size = 3) + 
+  annotate("text", x=3.5, y=t_surf+1.5, label="T surface", color="steelblue1") +
+  annotate("text", x=3.5, y=t_prof-3, label="T fond",color="steelblue4") +
+  scale_y_continuous(name="Température (°C)", limits = c(0,20)) +
+  #scale_x_discrete(name="Année de mesure") +
+  labs(title = "Evolution des températures de surface et fond ") +
+  theme(
+    axis.title = element_text(size = 12),
+    axis.title.x = element_blank(),
+    axis.title.y.left=element_text(color="steelblue4", face="bold"),
+    axis.text.y=element_text(face = "bold",color="steelblue4",vjust = 0),
+    axis.text.x = element_text(face = "bold",  angle = 40, vjust = 0.25, size=12),
+    plot.title = element_text(size=11, face="bold")
+  )+ labs(caption = "ATTENTION : Ce sont des données ponctuelles, mesurées une seule fois par an")
+
+ox <- ggplot(tab_comparaison_base_lac, aes(x=année), width=4, height =4) +
+  geom_point(aes(y= oxygène.surface), color='#4BAE32', shape= 16, size = 3) + 
+  geom_point(aes(y= oxygène.prof), color="palegreen4", shape= 16, size = 3) +
+  geom_hline(yintercept = 0.5, linetype="dashed", color="grey") +
+  geom_hline(yintercept =2, linetype="dashed", color="grey") +
+  annotate("text", x=3.5, y=15, label=" O2 surface", color="#4BAE32") +
+  annotate("text", x=3.5, y=0, label="O2 fond",color="palegreen4")+
+  scale_y_continuous(name="Saturation en oxygène dissous (mg/l)", limits = c(0,20)) +
+  #scale_x_discrete(name="Année de mesure") +
+  labs(title = "Evolution de l'oxygène dissous surface et fond") +
+  theme(
+    axis.title = element_text(size = 12),
+    axis.title.x = element_blank(),
+    axis.title.y.left=element_text(color="palegreen4", face="bold"),
+    axis.text.y=element_text(face = "bold",color="palegreen4",vjust = 0),
+    axis.text.x = element_text(face = "bold",  angle = 40, vjust = 0.25, size=12),
+    plot.title = element_text(size=11, face="bold")
+  ) + labs(caption = "ATTENTION : Ce sont des données ponctuelles, mesurées une seule fois par an")
+
+temp
+ox
+#scaleFactor <- max(as.numeric(tab_comparaison_base_lac$Temp.surface)) / max(as.numeric(tab_comparaison_base_lac$Prof.thermocline)) # Astuce pour mettre 2 axes en y
+```
+
+
+
+### pH et conductivité
+
+```{r ph_annee_precedent , fig.show = "hold", out.width ="35%"}
+pH_graphe <- ggplot(tab_comparaison_base_lac, aes(x=année), width=4, height =4) +
+  geom_point( aes(y= min_ph20lacs), color='tan1', shape= "-", size = 12) + 
+  geom_point(aes(y= max_ph20lacs), color='tan3', shape="-", size = 12) +
+  annotate("text", x=4.8, y=min(min_ph20lacs)-1, label="Min sur les 24 lacs", color="tan1") +
+  annotate("text", x=4.8,  y=max(max_ph20lacs)+1, label="Max sur les 24 lacs",color="tan3")+
+  geom_point(aes(y= pH.médian), color='orange', shape= 16, size = 3) +
+  scale_y_continuous(name="pH médian ", limits = c(1,13)) +
+ labs(title = "Evolution du pH ", subtitle ="pH médian dans toute la colonne d'eau") +
+  theme(
+    axis.title = element_text(size = 12), 
+    axis.title.x = element_blank(),
+    axis.title.y.left=element_text(color="orange", size=14),
+    axis.text.y=element_text( face = "bold",color="orange",vjust = 0, size=12),
+    axis.text.x = element_text(face = "bold",  angle = 40, vjust = 0.25, size=10),
+    plot.title = element_text(size=11, face="bold"),
+    plot.subtitle = element_text(size=9 )
+  )+ labs(caption = "ATTENTION : Ce sont des données ponctuelles, mesurées une seule fois par an")
+
+conductivite_graphe <- ggplot(tab_comparaison_base_lac, aes(x=année), width=4, height =4) +
+  geom_point(aes(y= min_cond20lacs), color='sienna1', shape= "-", size = 12) + 
+  geom_point(aes(y= max_cond20lacs), color='sienna3', shape="-", size = 12) +
+  annotate("text", x=1.8, y=min(min_cond20lacs)-1, label="Min sur les 24 lacs", color="sienna1") +
+  annotate("text", x=1.8, y=max(max_cond20lacs)+ 1, label="Max sur les 24 lacs",color="sienna3")+
+  geom_point(aes(y= Conductivité), color='sienna', shape= 16, size = 3)  +
+  scale_y_continuous(name="Conductivité (µS/cm)", limits = c(-1,350)) +
+  #scale_x_discrete(name="Année de mesure") +
+  labs(title = "Evolution de la conductivité", subtitle =" Conductivité moyenne dans toute la colonne d'eau") +
+  theme(
+    axis.title = element_text(size = 12),
+     axis.title.x = element_blank(),
+    axis.title.y.left=element_text(color="sienna"),
+    axis.text.y=element_text(face = "bold",color="sienna",vjust = 0, size=12),
+    axis.text.x = element_text(face = "bold",  angle = 40, vjust = 0.25, size=12),
+    plot.title = element_text(size=11, face="bold"),
+    plot.subtitle = element_text(size=9 )
+  )+ labs(caption = "ATTENTION : Ce sont des données ponctuelles, mesurées une seule fois par an")
+
+pH_graphe
+conductivite_graphe
+```
+
+
+Régime thermique 
+===================================== 
+
+Row {data-height=700}
+------------------------------------- 
+
+### **Evolution des températures**
+
+```{r prep_donnees }
+
+tet1 <- c()
+tet2<- c()
+
+ # -- tout d'abord : garder que les colonnes du lac 
+tabHF <- as.data.frame(temp_HF[temp_HF$nom.du.site %in% nom])#tableau par lac avec toutes les colonnes, même celles à des profondeur non remplies
+tabHF_col <-  tabHF[, colSums(is.na( tabHF)) != nrow( tabHF)] # supprime toutes les colonnes remplies de NA uniquement
+    
+#-- garder que les données de température haute fréquence ---------------------------------------- 
+objHF <- as.data.frame(tabHF_col[ ,grep("TmpWtr", colnames(tabHF_col))])#que les colonnes de valeur de température 
+nb_col <- ncol(objHF)
+  
+
+# Calcul des tempéarture min et max pour chaque capteur 
+for(n in 1:ncol(objHF)) {
+  tet <-as.data.frame(objHF[,n],na.rm=T)
+  minT <- min(objHF[,n],na.rm=T)
+  tet1 <- cbind(tet1,minT)
+  maxT <- max(objHF[,n],na.rm=T)
+  tet2 <- cbind(tet2,maxT)
+}
+tet1 <- type.convert(tet1, as.is = TRUE) # convertir (ici les colonnes en numéric)
+tet2 <- type.convert(tet2, as.is = TRUE) # convertir (ici les colonnes en numéric)
+
+miniT<-as.numeric(min(tet1[1,],na.rm=T))
+maxiT<-as.numeric(max(tet2[1,],na.rm=T))
+delta<-round((maxiT-miniT),0) #calcul différence du delta, arrondi au chiffre entier
+phrase_delta <- paste('Delta de température:\n',delta,'°C')
+  
+#objdate <- NULL
+objdate <- as.data.frame(tabHF_col[,grep("DateTime", colnames(tabHF_col))])
+objdateref <- as.data.frame(objdate[,1])
+colnames(objdateref) <- "date"
+
+date2measy <- as.Date(strptime(tabHF$DateTime, "%d/%m/%Y %H:%M")) #liste des dates, servira pour faire le graphe
+deb_thermistor <- (min(date2measy,na.rm=T))
+fin_thermistor <- (max(date2measy,na.rm=T))
+
+
+# Correspondance profonduer - nom des colonnes 
+tableau_prof<-data.frame(matrix(0,ncol=2,nrow=nb_col)) #tableau qui récapitule les profondeurs et les noms de colonnes associées
+  colnames(tableau_prof)<-c('Profondeur','Nom de la colonne de objHF associée')
+  prof_max <- 0
+  prof_min <- 0
+  prof_u <- 0
+  
+  for(z in (1:nb_col)){
+    long<-nchar(names(objHF[z])) 
+    
+    if (long ==16){
+      profondeur_de_la_mesure<-as.numeric(substr((names(objHF[z])),9,10))#on cherche C  extraire la profondeur du nom de colonne
+    }
+    if (long ==15){
+      profondeur_de_la_mesure<-as.numeric(substr((names(objHF[z])),9,9))
+    }
+    if (long ==17){
+      profondeur_de_la_mesure<-as.numeric(substr((names(objHF[z])),9,11))
+    }
+    if (long ==18){
+      profondeur_de_la_mesure<-as.numeric(substr((names(objHF[z])),9,12))
+    }
+    tableau_prof[z,1]<- profondeur_de_la_mesure #remplissage du tableau
+    tableau_prof[z,2]<-names(objHF[z]) #remplissage du tableau
+  } 
+  
+  prof_max<-as.numeric(max(tableau_prof$Profondeur))
+  prof_min<-as.numeric(min(tableau_prof$Profondeur))
+  
+  tableau_prof <- tableau_prof[order(tableau_prof[,1],decreasing = T),]
+  
+# pour les lacs avec beaucoup de capteurs - seuls 6 sont affichés  
+if (nom == "Anterne"){
+      tableau_prof <- rbind(tableau_prof[1,],tableau_prof[3,], tableau_prof[5,], tableau_prof[7,], tableau_prof[9,], tableau_prof[11,])
+      nb_col <- 6
+} 
+if (nom =="Bresses supérieur"){
+     tableau_prof <- rbind(tableau_prof[1,],tableau_prof[3,], tableau_prof[5,], tableau_prof[8,], tableau_prof[10,], tableau_prof[12,])
+     nb_col <- 6
+} 
+  if (nom =="Bresses inférieur"){
+     tableau_prof <- rbind(tableau_prof[1,],tableau_prof[4,], tableau_prof[6,], tableau_prof[8,], tableau_prof[10,], tableau_prof[13,])
+     nb_col <- 6
+}
+ if  (nom  == "Muzelle") {
+   tableau_prof <- rbind(tableau_prof[3,],tableau_prof[4,], tableau_prof[7,], tableau_prof[10,], tableau_prof[14,], tableau_prof[16,]) # garder que les prof : 2m, 4.5m, 7.5m, 8.5m, 12.5m, 15.5m
+   nb_col <- 6
+  }   
+ if  (nom  == "Bramant") {
+   tableau_prof <- rbind(tableau_prof[1,],tableau_prof[3,], tableau_prof[5,], tableau_prof[7,],  tableau_prof[9,], tableau_prof[10,])
+   nb_col <- 6
+ }  
+if  (nom  == "Cos") {
+   tableau_prof <- rbind(tableau_prof[1,],tableau_prof[3,], tableau_prof[5,], tableau_prof[7,],  tableau_prof[10,], tableau_prof[11,])
+   nb_col <- 6
+   } 
+if  (nom  == "Corne") {
+   tableau_prof <- rbind(tableau_prof[3,],tableau_prof[5,], tableau_prof[7,], tableau_prof[9,],  tableau_prof[12,], tableau_prof[13,])
+   nb_col <- 6
+  }
+  
+  if  (nom  == "Merlet Supérieur") {
+   tableau_prof <- rbind(tableau_prof[1,],tableau_prof[4,], tableau_prof[6,], tableau_prof[9,],  tableau_prof[11,], tableau_prof[12,])
+   nb_col <- 6
+ }
+  
+```
+
+```{r graphique, fig.height = 10, fig.width = 20, fig.align = "center"}
+par(xpd=TRUE,mar=c(5,11,5,4))#marge=bas.gauche.haut.droit
+plot(date2measy,objHF[,1],axes=F,frame.plot=T,type="p",col='red', ylab="", xlab="", xlim= c(as.Date(deb_thermistor), max(as.Date(fin_thermistor))), ylim=c(miniT, maxiT), col.lab="#313330",bty="u", col.axis="#313330",cex.lab=0.9, font.lab=2, cex = 0.2)
+
+# Ajout des rectangles pour les saisons
+couleur_saison  <- c("lightgoldenrod1", "lightgoldenrodyellow","snow2", "darkolivegreen2") # été - automne- hiver- printemps
+#nombre de jours mesurés :
+j1 <- as.Date(strptime(tabHF$DateTime[1], "%d/%m/%Y"))
+jfin <- as.Date(strptime(tabHF$DateTime[nrow(tabHF_col)], "%d/%m/%Y"))
+cc <- as.numeric(difftime(jfin,j1))
+cc <-170
+
+  if(cc >= 150){
+    for (sais in c(year(min(date2measy,na.rm=T)):year(max(date2measy,na.rm=T)))){
+      # Définir les dates 
+      deb_automne <- paste(sais,"09-21",sep="-")
+      deb_hiver <- paste(sais,"12-21",sep="-")
+      deb_printemps <- paste(sais,"03-21",sep="-")
+      deb_ete <- paste(sais,"06-21",sep="-")
+      deb_printempsN <- paste(sais+1,"03-21",sep="-")
+     
+      if (sais == year(min(date2measy,na.rm=T))){ # 1ére année de mesure
+        rect(as.Date(min(date2measy)),maxiT,as.Date(deb_automne),miniT,col=couleur_saison[1],border=NA) # été 2016
+        rect(as.Date(deb_automne),maxiT,as.Date(deb_hiver),miniT,col=couleur_saison[2],border=NA) # automne 2016
+        rect(as.Date(deb_hiver),maxiT,as.Date(deb_printempsN),miniT,col=couleur_saison[3],border=NA) # hiver 2016-2017
+      } else if (sais == year(max(date2measy,na.rm=T))){ # derniére année de mesure
+          rect(as.Date(deb_printemps),maxiT,as.Date(deb_ete),miniT,col=couleur_saison[4],border=NA) # printemps 2018
+          rect(as.Date(deb_ete),maxiT,as.Date(deb_automne),miniT,col=couleur_saison[1],border=NA) # été 2018
+          rect(as.Date(deb_automne),maxiT,as.Date(max(date2measy)),miniT,col=couleur_saison[2],border=NA) # aut 2018
+      }else{
+        rect(as.Date(deb_printemps),maxiT,as.Date(deb_ete),miniT,col=couleur_saison[4],border=NA) # printemps 2017
+        rect(as.Date(deb_ete),maxiT,as.Date(deb_automne),miniT,col=couleur_saison[1],border=NA) # été 2017
+        rect(as.Date(deb_automne),maxiT,as.Date(deb_hiver),miniT,col=couleur_saison[2],border=NA) # aut 2017
+        rect(as.Date(deb_hiver),maxiT,as.Date(deb_printempsN),miniT,col=couleur_saison[3],border=NA) # hiver 2017-2018
+      }
+      }
+    rect(as.Date(fin_thermistor),maxiT*1.5,as.Date(fin_thermistor+200),miniT,col="white",border=NA)#Rectangle blanc à la fin du graphique
+  }
+
+  #MaPalette = brewer.pal(8,"Set2")
+  MaPalette = c("#FF9900","#FF6633", "#660000", "#339900", "#33CC99", "#660099", "#666633", "#000000", "#FF3399")
+  #YMaPalette = è"#FF9900","#FF6633", "#660000", "#339900", "#33CC99", "#660099", "#666633", "#000000", "#FF3399", "red", "yellow", "blue")
+
+  
+  #tracer les courbes et leur légende
+  
+  #tracé de LA COURBE TEMPERATURE AU FOND
+  tab_fond<-data.frame((matrix(0,ncol=2,nrow=nrow(tabHF_col))))
+  tab_fond<- cbind.data.frame(tabHF_col[ ,grep(paste0("TmpWtr_d",tableau_prof[1,1]), colnames(tabHF_col))],tabHF_col$DateTime) #remplir le data.frame
+  colnames(tab_fond)<-c('temp_fond','Date') #changer les noms des colonnes
+  #tab_fond<-na.exclude(tab_fond)    #on enlève les lignes avec des NA
+  date2measy<-as.Date(strptime(tab_fond$Date, "%d/%m/%Y %H:%M"))
+  
+  if(is.na(min(tab_fond$temp_fond))==TRUE){
+    points(date2measy, tab_fond$temp_fond, col='blue', pch =3, cex=0.1)    #pour tracer la courbe : nuage de point si les données ne sont pas continues
+  }
+  if(is.na(min(tab_fond$temp_fond))==FALSE){
+  lines(date2measy, tab_fond$temp_fond, col='blue', lwd=2)    #pour tracer la courbe : ligne si les données sont continues (sans NA)
+  }
+  
+  legend(x=as.Date(deb_thermistor)-10,y=miniT, "température au fond",col='blue',adj=1.5, text.col= 'blue', bty="n", cex =1.3)
+  
+  
+  #TRACE DES AUTRES COURBES
+  if(nb_col>=2) {
+    for(u in (2:nb_col)){
+         prof_u <- tableau_prof[u,1] #profondeur de la mesure
+         tab_u<-data.frame((matrix(0,ncol=2,nrow=nrow(tabHF_col)))) #données de température correspondant à la profondeur u
+                  
+         tab_u<- cbind.data.frame(tabHF_col[ ,grep(tableau_prof[u,2], colnames(tabHF_col))],tabHF_col$DateTime) #remplisssage du data.frame
+         colnames(tab_u)<-c('temp_u','Date')
+         date2measy<-as.Date(strptime(tab_u$Date, "%d/%m/%Y %H:%M"))
+      if(is.na(min(tab_u$temp_u))==TRUE){
+          points(date2measy, tab_u[,1], col=MaPalette[u], pch =3, cex=0.1)    #pour tracer la courbe : nuage de points si les données ne sont pas continues
+           }
+      if(is.na(min(tab_u$temp_u))==FALSE){
+         lines(date2measy, tab_u[,1], col=MaPalette[u], lwd=2)    #pour tracer la courbe : ligne si les données sont continues (sans NA)
+      }
+      legend(x=as.Date(deb_thermistor)-25, y=miniT+1.5*u, paste0("température à ",prof_u,"m"), col=MaPalette[u],adj=1.5, text.col=MaPalette[u], bty="n", cex =1.3) 
+          }
+ }
+
+# lignes pour vérifier le tableau de date de prise / déprise en glace - C  enlever lorsqu'on fait "Knit"
+# abline(h=3.5, col="blue", lwd = 2, lty =2)
+# abline(h=2, col="blue", lwd =2, lty =2)
+  
+  lines(x =c(min(date2measy), max(date2measy)), y=c(5,5), lwd=1, lty=2)
+  lines(x =c(min(date2measy), max(date2measy)), y=c(10,10), lwd=1, lty=2)
+  lines(x =c(min(date2measy), max(date2measy)), y=c(15,15), lwd=1, lty=2)
+
+  axis(at=min(date2measy,na.rm=T),side=2,cex.axis=1.3, col="#313330")
+  axis(side=4, cex.axis=1.3, col="#313330")
+  axis.Date(1,at=seq(as.Date(deb_thermistor), as.Date(fin_thermistor), "months"), format="%b%y",cex.axis=1.3, font.axis=3, col="#313330", text.width, las = 2)
+  
+```
+
+Row {data-height=300}
+------------------------------------- 
+### Régime thermique du lac
+
+```{r comm_regime_thermique}
+
+# 1- prépa tableau été
+Param_2keep <- c( "Tmax_surface", #"GDD_brassprint_31aout_Tbase4_surface", # ou  "dateGDD400_Tbase4_surface", ??
+                 "Tmoy_surf_ete", "Date_depassement_10deg")
+tab_compar_annee_ete <- tab_comparaison_HF_lac %>% filter(Parametre %in% Param_2keep)
+tab_compar_annee_ete <- tab_compar_annee_ete[,(2:4)]
+
+# passer en format large
+tab_regime_thermique_ete <- tab_compar_annee_ete  %>% 
+  pivot_wider(names_from = Parametre, values_from = Valeurs) %>% 
+  relocate("Date_depassement_10deg", .after = "Annee")
+
+# afficher la date en format plus lisible
+tab_regime_thermique_ete$Date_depassement_10deg <- format(dmy(tab_regime_thermique_ete$Date_depassement_10deg),  format ="%d %B %Y")
+
+# pour enlever les lignes inutiles si besoin :
+#tab_regime_thermique <- na.omit(tab_regime_thermique) >> aaah: peut être que si c'est un data.table C'a ne supprime pas toutes les lignes ? C  voir  ? ou pas ?
+#tab_regime_thermique <- tab_regime_thermique [-(1:2),]
+
+colnames(tab_regime_thermique_ete) <- c("Année", "Date dépassement des 10°C en surface", "Tsurface maximale (°C)", "Tmoyenne de surface de l'été")
+
+# 2 - prépa tableau hiver/stratif - A FAIRE PLUS TARD POOUR METTRE toutes les varibales comme prise en glace / déprise / durée de stratif ...
+#Param_2keep <- c( "DateBrassPrint", "DateBrassAut", "DureeMixAutumn") # + faudra ajouter durée stratification hivernale
+#tab_compar_annee_hiver <- tab_comparaison_HF_lac %>% filter(Parametre %in% Param_2keep)
+#tab_compar_annee_hiver <- tab_compar_annee_hiver[,(2:4)]
+
+# passer en format large
+#tab_regime_thermique_hiver <- tab_compar_annee_hiver %>% pivot_wider(names_from = Parametre, values_from = Valeurs)
+  
+# pour enlever les lignes inutiles si besoin :
+#tab_regime_thermique <- tab_regime_thermique [-(1:2),]
+
+#colnames(tab_regime_thermique_hiver) <- c("Année","Date du brassage au printemps","Date du début du brassage automne", "Durée du brassage automne")
+
+# 3 - Dates et valeurs au bon format
+tab_annee <- tab_comparaison_HF_lac %>% filter(Annee %in% p)
+#date_mix_automne <- tab_annee  %>% filter(Parametre == "DateBrassAut") %>% select(Valeurs)
+#date_brass_print <- tab_annee  %>% filter(Parametre == "DateBrassPrint") %>% select(Valeurs)
+date_10deg <- tab_annee  %>% filter(Parametre == "Date_depassement_10deg") %>% select(Valeurs)
+temp_moy_surf <- tab_annee  %>% filter(Parametre == "Tmoy_surf_ete") %>% select(Valeurs)
+temp_max_surf <- tab_annee  %>% filter(Parametre == "Tmax_surface") %>% select(Valeurs)
+
+# format date
+#date_mix_automn<- format(date_mix_automne$Valeurs, format = "%d %B %Y") 
+#date_brass_print <-  format(date_brass_print$Valeurs, format = "%d %B %Y") 
+date_10deg <- format(dmy(date_10deg$Valeurs),  format ="%d %B %Y")
+  
+# 4 - Commentaires
+#commentaire_stratif_hivernale <- paste0("En ", p-1, " à l'automne, la date de mise en place de la stratification est le ",date_deb_stratif,". A cette date, l'eau au fond du lac est plus chaude qu'à la surface. La période de stratification inversée dure ",nb_jour," (+/- 20) jours. Le ",date_fin_stratif," la température de surface commence à augmenter rapidement, le brassage estival dure quelques jours et la stratification estivale se met en place.")
+commentaire_ete <- paste0("En début d'été, l'eau de surface du lac dépasse les 10°C le ",date_10deg,". En ", p, ", la température moyenne de surface en juillet-août a été de ",temp_moy_surf," °C et la température maximale de ", temp_max_surf,"°C.")
+# lac Bramant : commentaire_ete <- paste0("En début d'été, l'eau de surface du lac dépasse les 10°C le ",date_10deg,". Il manque les données du mois d'août pour donner la température moyenne de surface de l'été. La température maximale de juillet est de ", temp_max_surf,"°C.")
+#commentaire_ete <-" "
+
+# ANCIENS commentaires (je garde juste au cas où pour plus tard!)
+#commentaire_regime_thermique <- paste0("En ", p-1, " à l'automne, la date de mise en place de la stratification est le ",date_deb_stratif,". A cette date, l'eau au fond du lac est plus chaude qu'à la surface. La période de stratification inversée dure ",nb_jour," (+/- 20) jours. Le ",date_fin_stratif," la température de surface commence à augmenter rapidement, le brassage estival dure quelques jours et la stratification estivale se met en place.")
+#commentaire_regime_thermique2 <- paste0("En ", p, ", la température maximale en surface a été de ", max_temp,"°C.")
+
+
+# ajout commentaire Arpont
+#commentaire_regime_thermique2 <- paste0("En ", p, ", la température maximale en surface a été de ", max_temp,"°C. Cette hausse remarquable des températures est liée au retrait du glacier de l'Arpont et C  sa déconnexion avec le lac. Pour la première fois depuis l'installation des capteurs, la température à  2m de profondeur a dépassé les 10°C durant l'été.")
+
+# ajout commentaire Mont Coua
+#commentaire_regime_thermique2 <- paste0("En ", p, ", la température maximale en surface a été de ", max_temp,"°C. Suite C  un souci de terrain, les données de température au fond du lac n'ont pas pu être récupérées cette année. ")
+
+#ajout commentaire COS et Corne 2021, Plan Vianney 2022 - manque de données
+#commentaire_regime_thermique <-""
+#commentaire_regime_thermique2 <- paste0("Il  manque les données du capteur de surface pour effectuer les calculs des températures et des dates.")
+
+
+if ((nom == "Anterne")|(nom =="Bresses supérieur")|(nom =="Bresses inférieur")|(nom =="Bramant")|(nom =="Cos")|(nom =="Muzelle")){
+ commentaire_graphe <- paste0("NB : Seules les données de 6 capteurs sont affichées sur le graphique.")
+}else{
+  commentaire_graphe <- ""
+}
+if (nom =="Merlet Supérieur"){
+ commentaire_graphe <- paste0("Avant septembre 2021, le capteur de surface était situé à 3.5m de profondeur. A partir de septembre 2021, le capteur est installé à 2m comme dans les autres lacs. Les températures en surface et les dates calculées avant l'année 2022 sont donc peu comparables à 2022 ainsi qu'aux autres lacs.")
+}
+
+
+if (nom =="Corne"){
+ commentaire_graphe <- paste0("Les capteurs de température n'ont pas fonctionné de septembre 2022 à septembre 2023.")
+}
+
+if (nom =="Cos"){
+ commentaire_graphe <- paste0("Les calculs des températures max et moyennes sont faits sur les données à 2m de profondeur. Pour 2023, le capteur du lac de Cos à cette profondeur n'était pas fonctionnel.")
+}
+
+```
+**Commentaires sur l'été `r p` :**  
+`r commentaire_ete`
+
+*`r commentaire_graphe`*
+
+**Données synthétiques - sur les températures de l'été :**
+```{r results="asis"}
+knitr::kable(tab_regime_thermique_ete, row.names = FALSE, align = 'c')
+```
+
+
+```{r results="asis"}
+#knitr::kable(tab_regime_thermique_hiver, row.names = FALSE, align = 'c')
+```
+
+
+Evolution de l'oxygène
+=====================================
+
+Row {data-height=700}
+------------------------------------- 
+
+### **Evolution de l'oxygène dissous au fond du lac**
+
+```{r prep_data_O2_HF}
+if (nom %in% lac_avec_capteur_O2) { # Lac avec des données HF sur O2
+
+  # tableau de données pour le lac uniquement
+  tabHF_O2 <- as.data.frame(tabHF_col[ ,-grep("TmpWtr", colnames(tabHF_col))])  #que les colonnes sans les lettes 'TmpWtr' dans le titre de la colonne 
+  
+
+  # Muzelle => on garde que 3 profondeurs car beaucoup trop de minidot
+  if ((nom=="Muzelle")){
+    tabHF_O2 <-tabHF_O2[,-(7:8)]
+    tabHF_O2 <-tabHF_O2[,-(11:16)]
+    prof_max <- 18
+  }
+  
+   # si les données ne sont pas en "numéric"
+  tabHF_O2[ ,5] <- as.numeric(tabHF_O2[ ,5])
+  tabHF_O2[ ,6] <- as.numeric(tabHF_O2[ ,6])
+     
+  # Données du fond du lac
+  
+  if ((nom=="Plan Vianney")){
+    prof_max <- 6 # car il y a  un tinytag à 7.5m, donc prof max est 7.5 mais le minidot est à 6m.
+  }
+   if ((nom=="Cos")){
+    prof_max <- 40 # car il y a  aussi des données anciennes à 40m 
+   }
+   if ((nom=="Corne")){
+    prof_max <- 25 
+  }
+  
+  data_O2_fond <- tabHF_O2[ ,grep(paste0("DOconc_d",prof_max), colnames(tabHF_O2))] # garder que la colonne de données pour la prof_max
+  data_O2_fond <- as.data.frame(data_O2_fond)
+   
+  # si il y a un autre minidot
+  if (ncol(tabHF_O2) >= 8) {
+    
+    data_O2_sans_minidot_fond <- tabHF_O2[ ,-grep(paste0(prof_max), colnames(tabHF_O2))] # enlever les colonnes dans lesquelles il y "prof_max" dans le nom de la colonne
+    
+    if (nom == "Rabuons"){
+      data_O2_sans_minidot_fond <- data_O2_sans_minidot_fond[,-5]
+    }
+    
+    autre_prof <- as.numeric(substr(colnames(data_O2_sans_minidot_fond[5]),9,10))
+    data_O2_autre_minidot <- data_O2_sans_minidot_fond[ ,grep(paste0("DOconc_d",autre_prof), colnames(data_O2_sans_minidot_fond))] # garder que la colonne de données pour la prof_autre
+    data_O2_autre_minidot<- as.data.frame(data_O2_autre_minidot)
+    
+   
+     
+  # s'il y a 3ème minidot
+  if (ncol(tabHF_O2) > 10) {
+      data_O2_sans_2_minidot <-  data_O2_sans_minidot_fond[ ,-grep(paste0(autre_prof), colnames(data_O2_sans_minidot_fond))] # enlever les colonnes dans lequelles il y "autre_prof" dans le nom de la colonne
+      autre_prof3 <-  as.numeric(substr(colnames(data_O2_sans_2_minidot[5]),9,10)) 
+      data_O2_minidot3 <- data_O2_sans_2_minidot[ ,grep(paste0("DOconc_d",autre_prof3), colnames(data_O2_sans_2_minidot))] # garder que la colonne de données pour la autre_prof3
+      data_O2_minidot3<- as.data.frame(data_O2_minidot3)
+    }
+      
+     # s'il y a 4ème minidot
+  if (ncol(tabHF_O2) >= 12) {
+      data_O2_sans_3_minidot <-  data_O2_sans_2_minidot[ ,-grep(paste0(autre_prof3), colnames(data_O2_sans_2_minidot))] # enlever les colonnes dans lequelles il y "autre_prof3" dans le nom de la colonne
+      autre_prof4 <-  as.numeric(substr(colnames(data_O2_sans_3_minidot[5]),9,10)) 
+      data_O2_minidot4 <- data_O2_sans_3_minidot[ ,grep(paste0("DOconc_d",autre_prof4), colnames(data_O2_sans_3_minidot))] # garder que la colonne de données pour la autre_prof3
+      data_O2_minidot4<- as.data.frame(data_O2_minidot4)
+  }
+    
+} else {autre_prof <- NA }
+ 
+  # Min et max 
+  sat.O2_min <- min(tabHF_O2[ ,grep("DOconc", colnames(tabHF_O2))], na.rm=T) # on cherche des infos sur la colonne qui contient "DOconc"
+  sat.O2_max <- max(tabHF_O2[ ,grep("DOconc", colnames(tabHF_O2))], na.rm=T)
+  
+  # Mise en forme des dates 
+ tabHF_O2_pour_date <- tabHF_O2[complete.cases(tabHF_O2[ , paste0("DOconc_d",prof_max,".mg.L.")]),]
+  
+
+  date_O2_deb_fin <- as.Date(strptime(tabHF_O2_pour_date$DateTime, "%d/%m/%Y %H:%M")) #liste des dates, servira pour faire le graphe
+  deb_o2 <- (min(date_O2_deb_fin,na.rm=T))
+  fin_o2 <- (max(date_O2_deb_fin,na.rm=T))
+  # pour qu'on garde des NA si manque de données au milieu de la plage de donnée
+  date_O2 <- as.Date(strptime(tabHF_O2$DateTime, "%d/%m/%Y %H:%M")) #liste des dates, servira pour faire le graphe
+  
+  if (is.na(autre_prof) == TRUE){
+     data_O2_conc <- cbind(date_O2, data_O2_fond)
+   colnames(data_O2_conc) <- c("Date", "O2_fond")
+  }else {
+  data_O2_conc <- cbind(date_O2, data_O2_fond, data_O2_autre_minidot)
+   colnames(data_O2_conc) <- c("Date", "O2_fond",paste0("O2_",autre_prof,"m"))
+  }
+  
+}
+```
+
+```{r graphe_O2_HF , fig.height = 10, fig.width = 20, fig.align = "center"}
+if (nom %in%  lac_avec_capteur_O2) { # Lac avec des données HF sur O2
+  comm_capteur_O2 <- ""
+  par(xpd=TRUE,mar=c(5,10,5,4))#marge=bas.gauche.haut.droit
+  
+  plot(data_O2_conc$Date, data_O2_conc$O2_fond,axes=F,frame.plot=T,type="l",col='red',xlab= "", ylab=" Concentration en oxygène au fond du lac (mg/l)", xlim= c(as.Date(deb_o2), max(as.Date(fin_o2))), ylim=c(0 , sat.O2_max), col.lab="#313330",bty="u", col.axis="#313330",cex.lab=1.2, font.lab=2)
+  
+  # Ajout des rectangles pour les saisons
+  for (sais in (year(min(date_O2_deb_fin,na.rm=T)):year(max(date_O2_deb_fin,na.rm=T)))){
+  
+      # Définir les dates 
+      deb_automne <- paste(sais,"09-21",sep="-")
+      deb_hiver <- paste(sais,"12-21",sep="-")
+      deb_printemps <- paste(sais,"03-21",sep="-")
+      deb_ete <- paste(sais,"06-21",sep="-")
+      deb_printempsN <- paste(sais+1,"03-21",sep="-")
+     
+     if (sais == year(min(date_O2_deb_fin,na.rm=T))){ # 1ére année de mesure 
+      
+        rect(as.Date(min(date_O2_deb_fin)),sat.O2_max,as.Date(deb_automne),0,col=couleur_saison[1],border=NA) # été 2016
+        rect(as.Date(deb_automne),sat.O2_max,as.Date(deb_hiver),0,col=couleur_saison[2],border=NA) # automne 2016
+        rect(as.Date(deb_hiver),sat.O2_max,as.Date(deb_printempsN),0,col=couleur_saison[3],border=NA) # hiver 2016-2017
+      } else if (sais == year(max(date_O2_deb_fin,na.rm=T))){ # derniére année de mesure
+          rect(as.Date(deb_printemps),sat.O2_max,as.Date(deb_ete),0,col=couleur_saison[4],border=NA) # printemps 2018
+          rect(as.Date(deb_ete),sat.O2_max,as.Date(deb_automne),0,col=couleur_saison[1],border=NA) # été 2018
+          rect(as.Date(deb_automne),sat.O2_max,as.Date(max(date_O2_deb_fin)),0,col=couleur_saison[2],border=NA) # aut 2018
+      }else{
+        rect(as.Date(deb_printemps),sat.O2_max,as.Date(deb_ete),0,col=couleur_saison[4],border=NA) # printemps 2017
+        rect(as.Date(deb_ete),sat.O2_max,as.Date(deb_automne),0,col=couleur_saison[1],border=NA) # été 2017
+        rect(as.Date(deb_automne),sat.O2_max,as.Date(deb_hiver),0,col=couleur_saison[2],border=NA) # aut 2017
+        rect(as.Date(deb_hiver),sat.O2_max,as.Date(deb_printempsN),0,col=couleur_saison[3],border=NA) # hiver 2017-2018
+      }
+      }
+    rect(as.Date(fin_o2),sat.O2_max*1.5,as.Date(fin_o2+200),0,col="white",border=NA)#Rectangle blanc C  la fin du graphique
+  
+  #tracer les courbes et leur légende
+  lines(data_O2_conc$Date, data_O2_conc$O2_fond, col='blue', cex=0.8, lwd =2)
+  legend(x=as.Date(deb_o2)-190, y=0.5 , paste0("à ",prof_max,"m"), col="blue", adj=1.5, text.col= "blue", bty="n", cex =1.3) # position légende x = -100 ou -85
+  
+  if (is.na(autre_prof) == FALSE){ # si il y a plusieurs miniDOT
+    # sil y a un 2ème minidot
+    lines(date_O2, tabHF_O2[ ,grep(paste0("DOconc_d",autre_prof), colnames(tabHF_O2))], col='black', cex=0.8, lwd =2)
+    legend(x=as.Date(deb_o2)-190, y=1 , paste0("à ",autre_prof,"m"), col="black", adj=1.5, text.col="black", bty="n", cex =1.3) 
+    
+     # s'il y a un 3ème minidot
+    if (ncol(tabHF_O2) > 10){
+    lines(date_O2, tabHF_O2[ ,grep(paste0("DOconc_d",autre_prof3), colnames(tabHF_O2))], col="006666", cex=0.8, lwd =2)
+    legend(x=as.Date(deb_o2)-190, y=1.5 , paste0("à ",autre_prof3,"m"), col="006666", adj=1.5, text.col="006666", bty="n", cex =1.3) 
+   }
+    
+    # s'il y a un 4ème minidot
+      if (ncol(tabHF_O2) >= 12) {
+    lines(date_O2, tabHF_O2[ ,grep(paste0("DOconc_d",autre_prof4), colnames(tabHF_O2))], col='orange', cex=0.8, lwd =2)
+    legend(x=as.Date(deb_o2)-190, y=2 , paste0("à ",autre_prof4,"m"), col="orange", adj=1.5, text.col="orange", bty="n", cex =1.3) 
+      }
+  }
+
+  # lignes pointillées C  2mg/l et C  0.5 mg/l
+  lines(x =c(min(date_O2_deb_fin), max(date_O2_deb_fin)), y=c(2,2), lwd=1, lty=2)
+  lines(x =c(min(date_O2_deb_fin), max(date_O2_deb_fin)), y=c(0.5,0.5), lwd=1, lty=2)
+    
+  
+  axis(side=2, cex.axis=1.3, col="#313330")
+  axis(at=min(date_O2,na.rm=T),side=2,cex.axis=1.3, col="#313330")
+  axis.Date(1,at=seq(as.Date(deb_o2), as.Date(fin_o2), "months"), format="%b%y",cex.axis=1.3, font.axis=3, col="#313330", text.width, las = 2)
+} else {
+  comm_capteur_O2 <- "Pas de capteur d'O2 dans ce lac"
+}
+
+if (nom =="Pétarel"){
+comm_capteur_O2 <- "Les données recueillies au lac de Pétarel sont assez différentes des autres lacs d'altitude. Le lac de Pétarel a l'air d'avoir 2 périodes d'hypoxie dans l'année. La première assez courte en automne et une deuxième plus longue en hiver-printemps. Seule la période hiver-printemps est comptée dans le tableau ci-dessous."
+}
+if (nom =="Cos"){
+comm_capteur_O2 <- "Il y a une période instable pour l'O2 au fond lac de Cos dès mai 2023. Il n'y avait pas eu de période d'hypoxie en 2020, 2021 et 2022."
+} 
+
+if (nom =="Rabuons"){
+comm_capteur_O2 <- "Les concentrations en oxygène dissous au fond du lac varient très rapidement, avec des périodes d'hypoxie et d'anoxie. C'est très différent des autres lacs."
+} # pour le lac de Rabuons  -> ne pas afficher le tableau
+
+if (nom =="Aumar"){
+comm_capteur_O2 <-"La concentration max en O2 est calculée sur les données du printemps/été."
+} 
+
+if (nom =="Arpont"){
+comm_capteur_O2 <-"Cette année, il n'y a quasiment pas de période d'hypoxie au lac de l'Arpont, on observe une concentration inférieure à 2mg/L d'oxygène dissous seulement quelques jours au mois de mai 2023. "
+} 
+
+if (nom =="Bramant"){
+comm_capteur_O2 <-"Les données du capteur d'oxygène au fond sont étonnantes, le capteur doit sûrement être dans les sédiments une bonne partie de l'année."
+} 
+if (nom =="Mont Coua"){
+comm_capteur_O2 <-"Il n'y a pas de données d'O2 au fond du lac depuis septembre 2021, le capteur était disfonctionnel."
+} 
+
+ # pour le lac de Bramant Corne  -> ne pas afficher le tableau
+
+```
+
+
+
+Row {data-height=300}
+------------------------------------- 
+### Indicateurs
+
+```{r comm_O2}
+# A_VOIR idem pour les indicateursà voir !
+
+# Date importante du régime thermique
+Cmin <- tab_comparaison_HF_O2_lac_2020$Cmin
+duree_anoxie <- tab_comparaison_HF_O2_lac_2020$duree_anox
+Cmax <- tab_comparaison_HF_O2_lac_2020$Cmax
+
+
+# Autres années
+tab_O2 <- tab_comparaison_HF_O2_lac[,-(3:17)] #enlever les données de température
+tab_O2 <- tab_O2[,-1]
+
+tab_O2 <- tab_O2[,-(6:7)] # enlever les dates début et fin anoxie
+tab_O2 <- tab_O2[,-(8:10)] # enlever la partie sur date max
+tab_O2$Cmin <- as.numeric(tab_O2$Cmin)
+tab_O2$Cmax <- as.numeric(tab_O2$Cmax)
+
+# arrondir les concentrations
+tab_O2$Cmin <- round(tab_O2$Cmin,1)
+tab_O2$Cmax <- round(tab_O2$Cmax,1)
+
+# choix pour l'affiche : supprimer des lignes dans le tablo  (choisir entre supprimer quelques lignes ou le na.omit (na.omit enlève la ligne s'il y a un NA):
+tab_O2 <- tab_O2 [-(1:4),]
+#tab_O2 <- tab_O2 [-(4:5),] # 
+#tab_O2 <- na.omit(tab_O2)
+
+#tab_O2$Cmin <- round(tab_O2$Cmin,2)
+colnames(tab_O2) <- c("Année", "Concentration min (mg/l)","Date début hypoxie","Date fin hypoxie", "Durée hypoxie (en jours)","Durée anoxie (en jours)","Concentration max (mg/l) ")
+
+```
+
+`r comm_capteur_O2`
+
+```{r results="asis"}
+knitr::kable(tab_O2, row.names = FALSE, align = 'c')
+```
+
+_Définition_ :  
+_Hypoxie : Concentration <  2.0 mg/l_  
+_Anoxie : Concentration < 0.5 mg/l_  
+
+
+
+
+
+Phytoplanctons
+=====================================
+ Row {data-height= 600}
+------------------------------------- 
+### Résultats `r p`
+
+```{r prep_data, include = FALSE}
+resultat<-NULL
+toutout<-NULL
+premier<-NULL
+cc<-NULL
+resltat<-NULL
+classe_maj_phyto<-NA
+espece_majoritaire_p<-NA
+
+tabphyto_cl <- phyto[phyto$nom.du.site %in% nom]#= tableau pour le lac en question
+
+#choix de l'année
+tabphyto_cl <-  subset(tabphyto_cl,year(as.Date(strptime(date.de.prélèvement, "%d/%m/%Y"))) == p)  
+
+
+if ((nrow(tabphyto_cl)!= 0)== TRUE) { # seulement pour les lacs avec des données phyto
+  tabphyto <- merge(tabphyto_cl, classe_phyto, by ="nom.du.taxon.déterminé") # fusionne les data frames x et y par la colonne name.
+
+### Calcul des indices de diversité (dans le data.frame tabphyto mais /!\ que avec les colonnes nb de cellule)
+nb_cellules <- "nombre de cellules par ml"
+tab_phyto_nb_cell <- tabphyto[tabphyto$paramètre %in% nb_cellules ]
+  
+max_phyto<-max(tab_phyto_nb_cell$valeur.du.résultat)
+  
+ligne_esp_maj_p <- subset(tab_phyto_nb_cell,tab_phyto_nb_cell$valeur.du.résultat==max_phyto)
+ligne_esp_maj_p <- ligne_esp_maj_p[1,]
+espece_majoritaire_p <- as.character(ligne_esp_maj_p$nom.du.taxon.déterminé)
+taille_esp_maj_p <- as.character(ligne_esp_maj_p$nano.ou.microphytoplancton)
+classe_maj_phyto <- as.character(ligne_esp_maj_p$Classe.algale.sensu.Bourelly)
+
+richesse_phyto<-nrow(tab_phyto_nb_cell)
+abondance_phyto<-sum(tab_phyto_nb_cell$valeur.du.résultat)
+  
+pi <- tab_phyto_nb_cell$valeur.du.résultat/abondance_phyto
+lpi <- log2(pi)
+diversite_phyto <- -sum(pi*lpi)
+equita_phyto <- diversite_phyto/log2(richesse_phyto)
+
+  
+# Recherche des infos par groupes
+for(nomphyto2 in unique(tabphyto$Classe.algale.sensu.Bourelly) ){
+    
+    tabclasse <- tabphyto[tabphyto$Classe.algale.sensu.Bourelly %in% nomphyto2]#=tableau pour chaque classe dans chaque lac
+    tabclasse <- tabclasse[tabclasse$paramètre %in%nb_cellules ]#ne prendre que le nombre d'objet par ml (sinon il y au aussi le nb de cellule par ml <- et on fait une double somme)
+    somme <- sum(c(tabclasse$valeur.du.résultat))
+    m <- cbind.data.frame(somme,nomphyto2,nom )
+    resultat <- rbind(resultat,m)
+    
+    cc <- list()
+    couleurtest <- list()
+    
+    if(nomphyto2=="Chlorophycees"){
+      cc<-("chartreuse3")
+      compte<-nrow(tabclasse)
+      int<-cbind.data.frame(m,cc,compte)
+      resltat<-rbind.data.frame(resltat,int)
+    }
+    if(nomphyto2=="Cryptophycees"){
+      cc<-("orangered")
+      compte<-nrow(tabclasse)
+      int<-cbind.data.frame(m, cc, compte)
+      resltat<-rbind.data.frame(resltat,int)
+    }
+    if(nomphyto2=="Diatomees"){
+      cc<-c("red3")
+      compte<-nrow(tabclasse)
+      int<-cbind.data.frame(m, cc, compte)
+      resltat<-rbind.data.frame(resltat,int)
+    }
+    if(nomphyto2=="Dinophycees"){
+      cc<-c("magenta1")
+      compte<-nrow(tabclasse)
+      int<-cbind.data.frame(m, cc, compte)
+      resltat<-rbind.data.frame(resltat,int)
+    }
+    if(nomphyto2=="Chrysophycees"){
+      cc<-c("darkgoldenrod1")
+      compte<-nrow(tabclasse)
+      int<-cbind.data.frame(m, cc, compte)
+      resltat<-rbind.data.frame(resltat,int)
+    }
+    if(nomphyto2=="Zygophycees"){
+      cc<-c("darkgreen")
+      compte<-nrow(tabclasse)
+      int<-cbind.data.frame(m, cc, compte)
+      resltat<-rbind.data.frame(resltat,int)
+    }
+    if(nomphyto2=="Cyanobacteries"){
+      cc<-c("turquoise3")
+      compte<-nrow(tabclasse)
+      int<-cbind.data.frame(m, cc, compte)
+      resltat<-rbind.data.frame(resltat,int)
+    }
+    if(nomphyto2=="Euglenophycees"){
+      cc<-c("tan4")
+      compte<-nrow(tabclasse)
+      int<-cbind.data.frame(m, cc,compte)
+      resltat<-rbind.data.frame(resltat,int)
+    } 
+    if(nomphyto2=="Xantophycees"){
+      cc<-c("steelblue4")
+      compte<-nrow(tabclasse)
+      int<-cbind.data.frame(m, cc, compte)
+      resltat<-rbind.data.frame(resltat,int)
+    }
+    essai<-as.data.frame(resltat)
+    tabordo<-essai[order(essai$somme, decreasing = T),]
+    yiha<-as.character(tabordo$cc)
+}
+
+resultat2phyto<-NULL
+resltat2<-NULL
+  
+for(nomphyto3 in unique(tabphyto$nom.du.taxon.déterminé) ){
+    tabtaxonphyto<-tabphyto[tabphyto$nom.du.taxon.déterminé %in% nomphyto3]#=tableau pour chaque taxon dans chaque lac
+    tabtaxonphyto<-tabtaxonphyto[tabtaxonphyto$paramètre %in% nb_cellules]#/!\ que le nombre de cellule par ml
+    
+    # if (tabtaxonphyto$valeur.du.resultat !=0){
+    
+    sommetaxphyto<-sum(c(tabtaxonphyto$valeur.du.résultat))
+    mmmphyto<-cbind.data.frame(sommetaxphyto,nomphyto3)
+    corresclasse<-tabtaxonphyto$Classe.algale.sensu.Bourelly[1] 
+    
+    cc<-list()
+    couleurtest<-list()
+    
+    if(corresclasse=="Chlorophycees"){
+      cc<-("chartreuse3")
+      int2 <- cbind.data.frame(mmmphyto,cc)
+      resltat2 <- rbind.data.frame(resltat2, int2)
+      
+    }
+    if(corresclasse=="Cryptophycees"){
+      cc<-("orangered")
+      int2<-cbind.data.frame(mmmphyto, cc)
+      resltat2<-rbind.data.frame(resltat2,int2)
+      
+    }
+    if(corresclasse=="Diatomees"){
+      cc<-c("red3")
+      int2<-cbind.data.frame(mmmphyto, cc)
+      resltat2<-rbind.data.frame(resltat2,int2)
+    }
+    if(corresclasse=="Dinophycees"){
+      cc<-c("magenta1")
+      int2<-cbind.data.frame(mmmphyto, cc)
+      resltat2<-rbind.data.frame(resltat2,int2)
+      
+    }
+    if(corresclasse=="Chrysophycees"){
+      cc<-c("darkgoldenrod1")
+      int2<-cbind.data.frame(mmmphyto, cc)
+      resltat2<-rbind.data.frame(resltat2,int2)
+    }
+    
+    if(corresclasse=="Zygophycees"){
+      cc<-c("darkgreen")
+      int2<-cbind.data.frame(mmmphyto, cc)
+      resltat2<-rbind.data.frame(resltat2,int2)
+    }
+    
+    if(corresclasse=="Cyanobacteries"){
+      cc<-c("turquoise3")
+      int2<-cbind.data.frame(mmmphyto, cc)
+      resltat2<-rbind.data.frame(resltat2,int2)
+    }
+    
+    if(corresclasse=="Euglenophycees"){
+      cc<-c("tan4")
+      int2<-cbind.data.frame(mmmphyto, cc)
+      resltat2<-rbind.data.frame(resltat2,int2)
+    } 
+    
+    if(corresclasse=="Xantophycees"){
+      cc<-c("steelblue4")
+      int2<-cbind.data.frame(mmmphyto, cc)
+      resltat2<-rbind.data.frame(resltat2,int2)
+    }
+    resultat2phyto<-as.data.frame(resltat2)
+    #}
+    sommetotalephyto<-sum(resultat2phyto$sommetaxphyto)
+    pourcentagephyto<-resultat2phyto$sommetaxphyto/sommetotalephyto*100
+    resultat2phyto<-cbind(resultat2phyto, pourcentagephyto)
+    newphyto<- resultat2phyto[order(resultat2phyto$sommetaxphyto, decreasing = T),]#tri par ordre croissant selon le biovol
+    aphyto <- as.data.frame(newphyto [1:3,])#on prend les 3 premières lignes
+    yiha2 <- as.character(aphyto$cc)
+  } 
+}
+
+# Stat sur les 20 lacs
+ date_tab_comp_p <- as.Date(strptime(tab_comparaison_plancton_lac$année, "%Y"))
+ min_ab20lacs <-  max_ab20lacs <- min_ric20lacs <-  max_ric20lacs <- min_E20lacs <-  max_E20lacs <- min_H20lacs <-  max_H20lacs <- c()
+  for (i in ((year(min(date_tab_comp_p,na.rm=T))):(year(max(date_tab_comp_p,na.rm=T))))){
+   # for (i in ((year(min(date_tab_comp_p,na.rm=T))):2022)){ à suppr ??
+    annee_Phyto <- subset(tab_comparaison_plancton,tab_comparaison_plancton$année == i )
+    
+    # Abondance
+    ab_min_annee <- min(annee_Phyto$Abondance_phyto, na.rm=TRUE) 
+    ab_max_annee <- max(annee_Phyto$Abondance_phyto, na.rm=TRUE) 
+    min_ab20lacs <- c(min_ab20lacs, ab_min_annee)
+    max_ab20lacs <- c(max_ab20lacs,  ab_max_annee)
+    # Richesse
+    ric_min_annee <- min(annee_Phyto$Richesse_phyto, na.rm=TRUE) 
+    ric_max_annee <- max(annee_Phyto$Richesse_phyto, na.rm=TRUE) 
+    min_ric20lacs <- c(min_ric20lacs, ric_min_annee)
+    max_ric20lacs <- c(max_ric20lacs,  ric_max_annee)
+    # Diversité
+    h_min_annee <- min(annee_Phyto$Diversité.de.Shanon_phyto, na.rm=TRUE) 
+    h_max_annee <- max(annee_Phyto$Diversité.de.Shanon_phyto, na.rm=TRUE) 
+    min_H20lacs <- c(min_H20lacs, h_min_annee)
+    max_H20lacs <- c(max_H20lacs,  h_max_annee)
+    # Equitabilité
+    E_min_annee <- min(annee_Phyto$Equitabilité.de.Piélou_phyto, na.rm=TRUE) 
+    E_max_annee <- max(annee_Phyto$Equitabilité.de.Piélou_phyto, na.rm=TRUE) 
+    min_E20lacs <- c(min_E20lacs, E_min_annee)
+    max_E20lacs <- c(max_E20lacs,  E_max_annee)
+    }
+
+ 
+# Tableau année précédentes
+tab_phyto_espece <- tab_comparaison_plancton_lac[9:14]
+tab_phyto_espece <- tab_phyto_espece [- (2:4)]
+tab_phyto_espece <- cbind(tab_comparaison_plancton_lac$année, tab_phyto_espece)
+tab_phyto_espece <- na.omit(tab_phyto_espece)
+colnames(tab_phyto_espece) <- c("Année","Richesse","Classe majoritaire","espèce majoritaire")
+
+```
+
+
+```{r histogramme}
+if ((nrow(tabphyto_cl)!= 0)== TRUE) {
+  #par(mfrow=c(1,2))
+  couleurs<-NULL
+  coul<-NULL
+  
+  par(mar=c(7,7,4,6))#marge=bas.gauche.haut.droit
+  barplot(tabordo$somme,space=0,las=2,col=yiha,main="Phytoplancton",axes=F, cex.names = 0.8,col.axis= "#313330", ylab="Nombre de cellules par ml")
+  axis(side=2,pos=0,las=2,col.axis="#313330")
+    
+  par(mar=c(0,0,0,0))
+  plot.window(c(0,10),c(0,10))
+    
+  maxisphyto<-(aphyto$nomphyto3)
+  prctgphyto<-(aphyto$pourcentagephyto)
+  
+  text(x=7.5,y=2,pos=3,paste("Nombre d'espèces dénombrées au microscope :",richesse_phyto), cex=0.8)
+  text(x=6.16,y=1.5,pos=3, "espèces majoritaires : ", cex=0.8)
+  text(x=8,y=1,pos=3, paste("-",maxisphyto[1],":",round(prctgphyto[1],1),"%"), cex=0.8, col=yiha2[1])
+  text(x=8,y=0.5,pos=3, paste("-",maxisphyto[2],":",round(prctgphyto[2],1),"%"), cex=0.8, col=yiha2[2])
+  text(x=8,y=0,pos=3, paste("-",maxisphyto[3],":",round(prctgphyto[3],1),"%"), cex=0.8,col=yiha2[3])
+  #text(x=0.1, y=7, pos =2, "Nombre de cellules par ml ", srt=90, cex=1.2,col="#313330")
+  
+  rasterImage(imgphyto,xleft=0.1, ybottom=8.5, xright=1.5, ytop=10.2)
+  legend(x=0.5,y=2,paste(tabordo$nomphyto2, ":",tabordo$compte,"espèce(s)"),col=yiha, text.col=yiha, lwd=2, bty="n", cex=0.7)
+}
+```
+
+
+
+### Commentaire `r p` 
+
+```{r comment_phyto}
+if ((nrow(tabphyto_cl)!= 0)== TRUE) {
+  phy1 <- paste("",(length(resltat[,1])),"des 9 classes principales de phytoplancton sont représentées.")
+  
+  # pour le comm2
+  if(names(sort(tapply(newphyto$sommetaxphyto,newphyto$cc,sum),decreasing = T)[1])=="red3"){
+      phy2<-paste0("Le phytoplancton est dominé par la classe des Diatomées. Les Diatomées sont un des groupes les plus importants du phytoplancton. Elles ont la capacité de stocker la silice. L'espèce majoritaire est ",espece_majoritaire_p,", c'est une espèce de ",taille_esp_maj_p,".")
+    }
+    if(names(sort(tapply(newphyto$sommetaxphyto,newphyto$cc,sum),decreasing = T)[1])=="orangered"){
+      phy2<-paste0("Le phytoplancton est dominé par la classe des Cryptophycées. L'espèce majoritaire est ",espece_majoritaire_p," ; c'est une espèce de ",taille_esp_maj_p,".")
+    }
+    
+    if(names(sort(tapply(newphyto$sommetaxphyto,newphyto$cc,sum),decreasing = T)[1])=="darkgoldenrod1"){
+      phy2<-paste0("Le phytoplancton est dominé par la classe des Chrysophycées. L'espèce majoritaire est ",espece_majoritaire_p," ; c'est une espèce de ",taille_esp_maj_p,".")
+      
+    }
+    if(names(sort(tapply(newphyto$sommetaxphyto,newphyto$cc,sum),decreasing = T)[1])=="turquoise3"){
+      phy2<-paste0("Le phytoplancton est dominé par la classe des Cyanobactéries, souvent responsables de l'eutrophisation du milieu. Elles sont capables de produire de la toxine. L'espèce majoritaire est ",espece_majoritaire_p," ; c'est une espèce de ",taille_esp_maj_p,".")
+    }
+    if(names(sort(tapply(newphyto$sommetaxphyto,newphyto$cc,sum),decreasing = T)[1])=="chartreuse3"){
+      phy2<-paste0("Le phytoplancton est dominé par la classe des Chlorophycées, appelées communément algues vertes. L'espèce majoritaire est ",espece_majoritaire_p," ; c'est une espèce de ",taille_esp_maj_p,".")
+    }
+    if(names(sort(tapply(newphyto$sommetaxphyto,newphyto$cc,sum),decreasing = T)[1])=="magenta1"){
+      phy2<-paste0("Les Dynophycées sont la classe phytoplanctonique majoritaire. Elles renseignent sur la stabilité de la colonne d'eau.L'espèce majoritaire est ",espece_majoritaire_p," ; c'est une espèce de ",taille_esp_maj_p,".")
+    }
+    if(names(sort(tapply(newphyto$sommetaxphyto,newphyto$cc,sum),decreasing = T)[1])=="tan4"){
+      phy2<-paste0("Le phytoplancton est dominé par la classe des Euglenophycées. L'espèce majoritaire est ",espece_majoritaire_p," ; c'est une espèce de ",taille_esp_maj_p,".")
+    }
+    if(names(sort(tapply(newphyto$sommetaxphyto,newphyto$cc,sum),decreasing = T)[1])=="steelblue4"){
+      phy2<-paste0("Le phytoplancton est dominé par la classe des Xantophycées. L'espèce majoritaire est ",espece_majoritaire_p," ; c'est une espèce de ",taille_esp_maj_p,".")
+    }
+    if(names(sort(tapply(newphyto$sommetaxphyto,newphyto$cc,sum),decreasing = T)[1])=="darkgreen"){
+      phy2<-paste0("Le phytoplancton est dominé par la présence des Zygophycées, des algues filamenteuses. L'espèce majoritaire est ",espece_majoritaire_p," ; c'est une espèce de ",taille_esp_maj_p,".")
+    }
+    
+    #Commentaire plus général sur le phyto
+    if(is.na(richesse_phyto)==FALSE){
+      phyto<-paste0("L'étude du phytoplancton a permis d'identifier ",richesse_phyto," espèces différentes. Deux indices ont été calculés, la diversité de Shannon (H') : ",round(diversite_phyto,2)," et l'équitabilité (E): ",round(equita_phyto,2),".")
+    }
+} else {
+  phy1 <- phy2 <- paste(" ")
+  phyto <- paste0("Pas de données de phytoplancton disponible en ",annee,".")
+}
+
+```
+
+`r phy1`  
+
+`r phy2`
+
+
+`r phyto`
+
+**Années précédentes : **
+```{r results="asis"}
+knitr::kable(tab_phyto_espece, row.names = FALSE, align = 'c')
+```
+
+
+Row {data-width=500}{.tabset .tabset-fade}
+-------------------------------------
+### Richesse et abondance
+```{r phyto_richesse , fig.show = "hold", out.width ="35%"}
+ep_tiret <- 20 # épaisseur des tirets de tous les graphes : richesse, abondance, diversités pour zoo et phyto
+
+richesse <- ggplot(tab_comparaison_plancton_lac, aes(x=année), width=4, height =4) +
+  geom_point(aes(y= min_ric20lacs), color='sienna1', shape= "-", size = ep_tiret) + 
+  geom_point(aes(y= max_ric20lacs), color='sienna3', shape="-", size = ep_tiret) +
+  geom_point(aes(y= Richesse_phyto), color='sienna4', shape= 16, size = 3) + 
+  scale_y_continuous(name ="Nombre d'espèce différente") +
+  annotate("text", x=5.5 , xend=8, y=min(min_ric20lacs), label="Min sur les 24 lacs", color="sienna1") +
+  annotate("text", x=5.5 , xend=8,  y=max(max_ric20lacs), label="Max sur les 24 lacs",color="sienna3")+
+  labs(title = "Evolution de la richesse ", subtitle ="Nombre de taxon - Phytoplanctons") +
+  theme(
+    axis.title = element_text(size = 12), 
+    axis.title.x = element_blank(),
+    axis.title.y.left=element_text(color="sienna4", size=14),
+    axis.text.y=element_text(face = "bold",color="sienna4",vjust = 0, size=12),
+    axis.text.x = element_text(face = "bold",  angle = 40, vjust = 0.25, size=12),
+    plot.title = element_text(size=11, face="bold"),
+    plot.subtitle = element_text(size=9 )
+  )
+abondance <- ggplot(tab_comparaison_plancton_lac, aes(x=année), width=4, height =4) +
+  geom_point(aes(y=  min_ab20lacs ), color='indianred1', shape= "-", size = ep_tiret) + 
+  geom_point(aes(y=  max_ab20lacs ), color='indianred3', shape="-", size = ep_tiret) +
+  geom_point(aes(y= Abondance_phyto), color='indianred4', shape= 16, size = 3) + 
+  scale_y_continuous(name ="Abondance par mL") +
+  annotate("text", x=5.5, xend=8, y=min(min_ab20lacs), label="Min sur les 24 lacs", color="indianred1") +
+  annotate("text", x=5.5 , xend=8,  y=max(max_ab20lacs ), label="Max sur les 24 lacs",color="indianred3")+
+  labs(title = "Evolution de l'abondance ", subtitle = "Nombre d'individu par mL") +
+  theme(
+    axis.title = element_text(size = 12), 
+    axis.title.x = element_blank(),
+    axis.title.y.left=element_text(color="indianred4", size=14),
+    axis.text.y=element_text(face = "bold",color="indianred4",vjust = 0, size=12),
+    axis.text.x = element_text(face = "bold",  angle = 40, vjust = 0.25, size=12),
+    plot.title = element_text(size=11, face="bold"),
+    plot.subtitle = element_text(size=9 )
+  ) 
+
+# afficher les graphes
+richesse
+abondance
+
+```
+
+
+### Indices de diversité 
+```{r phyto_diversite , fig.show = "hold", out.width ="35%"}
+diversite <- ggplot(tab_comparaison_plancton_lac, aes(x=année), width=4, height =4) +
+  geom_point(aes(y= min_H20lacs), color='goldenrod1', shape= "-", size = ep_tiret) + 
+  geom_point(aes(y= max_H20lacs), color='goldenrod3', shape="-", size = ep_tiret) +
+  geom_point(aes(y= Diversité.de.Shanon_phyto), color='goldenrod4', shape= 16, size = 3) + 
+  scale_y_continuous(name ="Diversité - indice de Shannon") +
+  annotate("text", x=5.5 , xend=8, y=min(min_H20lacs), label="Min sur les 24 lacs", color="goldenrod1") +
+  annotate("text", x=5.5 , xend=8,  y=max(max_H20lacs), label="Max sur les 24 lacs",color="goldenrod3")+
+  labs(title = "Evolution de la diversité (H') ", subtitle = "Indice de Shanon") +
+  theme(
+    axis.title = element_text(size = 12), 
+    axis.title.x = element_blank(),
+    axis.title.y.left=element_text(color="goldenrod4", size=14),
+    axis.text.y=element_text(face = "bold",color="goldenrod4",vjust = 0, size=12),
+    axis.text.x = element_text(face = "bold",  angle = 40, vjust = 0.25, size=12),
+    plot.title = element_text(size=11, face="bold"),
+    plot.subtitle = element_text(size=9 )
+  )
+
+equitabilite <- ggplot(tab_comparaison_plancton_lac, aes(x=année), width=4, height =4) +
+  geom_point(aes(y= min_E20lacs), color='springgreen3', shape= "-", size = ep_tiret) + 
+  geom_point(aes(y= max_E20lacs), color='springgreen4', shape="-", size = ep_tiret) +
+  geom_point(aes(y= Equitabilité.de.Piélou_phyto), color='palegreen4', shape= 16, size = 3) + 
+  scale_y_continuous(name ="Equitabilité - indice de Piélou", limits = c(0,1)) +
+  annotate("text", x=5.5, xend=8, y=min(min_E20lacs), label="Min sur les 24 lacs", color="springgreen3") +
+  annotate("text", x=5.5,  y=max(max_E20lacs), label="Max sur les 24 lacs",color="springgreen4")+
+  labs(title = "Evolution de l'équitabilité (E) ", subtitle = "Indice de Piélou") +
+  theme(
+    axis.title = element_text(size = 12), 
+    axis.title.x = element_blank(),
+    axis.title.y.left=element_text(color="palegreen4", size=14),
+    axis.text.y=element_text(face = "bold",color="palegreen4",vjust = 0, size=12),
+    axis.text.x = element_text(face = "bold",  angle = 40, vjust = 0.25, size=12),
+    plot.title = element_text(size=11, face="bold"),
+    plot.subtitle = element_text(size=9 )
+  )
+
+diversite
+equitabilite
+```
+
+
+Zooplanctons
+=====================================
+
+Row {data-height= 200}
+-------------------------------------
+
+```{r prep_data_zoo, include= FALSE}
+resultat<-NULL
+toutout<-NULL
+premier<-NULL
+cc<-NULL
+resltatzoo<-NULL
+classe_maj_zoo<-NA
+espece_majoritaire <- NA
+  
+tabzoo_cl <- zoo[zoo$nom.du.site %in% nom]#= tableau pour chaque lac
+#choix de l'année 2018
+tabzoo_cl <-  subset(tabzoo_cl,year(as.Date(strptime(date.de.prélèvement, "%d/%m/%Y"))) == p)  
+
+if ((nrow(tabzoo_cl)!= 0)== TRUE) { # seulement pour les lacs avec des données zoo
+  tabzoo<-merge(tabzoo_cl, classe_zoo, by ="nom.du.taxon.déterminé") # fusionne les data frames x et y par la colonne name.
+  
+  max_zoo <- max(tabzoo$valeur)
+  ligne_esp_maj <- subset(tabzoo,tabzoo$valeur==max_zoo)
+  ligne_esp_maj <- ligne_esp_maj[1,]
+  espece_majoritaire <- as.character(ligne_esp_maj$nom.du.taxon.déterminé)
+  classe_maj_zoo <- as.character(ligne_esp_maj$classe)
+  
+  
+  if(as.character(classe_maj_zoo)=="Rotiferes"){
+    zoo1 <- paste0("La classe de zooplancton la plus abondante est les Rotifères. L'espèce majoritaire est ",espece_majoritaire,".")
+  }
+  if(as.character(classe_maj_zoo)=="Cladoceres"){
+    zoo1 <- paste0("La classe de zooplancton la plus abondante est les Caldocères. L'espèce majoritaire est ",espece_majoritaire,".")
+  }
+  if(as.character(classe_maj_zoo)=="Copepodes"){
+    zoo1<-paste0("La classe de zooplancton la plus abondante est les Copépodes. L'espèce majoritaire est ",espece_majoritaire,".")
+  }
+ 
+  
+  ###Calcul des indices de diversité (dans le data.frame tabphyto mais /!\ que avec les colonnes nb de cellule)
+  richesse_zoo <- nrow(tabzoo)
+  abondance_zoo <- sum(tabzoo$valeur)
+  
+  zi<-tabzoo$valeur/abondance_zoo
+  lzi<-log2(zi)
+  diversite_zoo<--sum(zi*lzi, na.rm=T)
+  equita_zoo<-diversite_zoo/log2(richesse_zoo)
+  
+ 
+# Recherche des infos par groupes
+ for(nomzoo2 in unique(tabzoo$classe) ){
+    tabclassezoo <- tabzoo[tabzoo$classe %in% nomzoo2]#=tableau pour chaque classe dans chaque lac
+    somme <- sum(c(tabclassezoo$valeur))
+    mzoo <- cbind.data.frame(somme,nomzoo2,nom)
+    resultat <- rbind(resultat,mzoo)
+    resultatzoo <- NULL
+    cczoo<-list()
+    if(nomzoo2=="Cladoceres"){
+      cczoo<-"firebrick4"
+      comptezoo<-length(unique(tabclassezoo$nom.du.taxon.déterminé))
+      intzoo<-cbind.data.frame(mzoo, cczoo,comptezoo)
+      
+      resltatzoo<-rbind.data.frame(resltatzoo,intzoo)
+    }
+    
+    if(nomzoo2=="Copepodes"){
+      cczoo<-"darkorchid1"
+      comptezoo<-length(unique(tabclassezoo$nom.du.taxon.déterminé))
+      intzoo<-cbind.data.frame(mzoo, cczoo,comptezoo)
+      resltatzoo<-rbind.data.frame(resltatzoo, intzoo)
+    }
+    
+    if(nomzoo2=="Rotiferes"){
+      cczoo<-"skyblue3"
+      comptezoo<-length(unique(tabclassezoo$nom.du.taxon.déterminé))
+      intzoo<-cbind.data.frame(mzoo, cczoo, comptezoo)
+      resltatzoo<-rbind.data.frame(resltatzoo,intzoo)
+    }
+    
+    
+    essaizoo<-as.data.frame(resltatzoo)
+    tabzooordo<-essaizoo[order(essaizoo$somme, decreasing = T),]
+    yihazoo<-as.character(tabzooordo$cczoo)
+  }  
+
+resultat2<-NULL
+resltat2<-NULL
+
+for(nomzoo3 in unique(tabzoo$nom.du.taxon.déterminé) ){
+    tabtaxon<-tabzoo[tabzoo$nom.du.taxon.déterminé %in% nomzoo3]#=tableau pour chaque classe dans chaque lac
+    sommetax<-sum(c(tabtaxon$valeur))
+    mmmzoo<-cbind.data.frame(sommetax,nomzoo3)
+    corresclassezoo<-as.character(tabtaxon$classe)  
+    cczoo2<-list()
+    couleurtest<-list()
+    if(corresclassezoo[1]=="Cladoceres"){
+      cczoo2<-("firebrick4")
+      int2<-cbind.data.frame(mmmzoo,cczoo2)
+      resltat2<-rbind.data.frame(resltat2, int2)
+    }
+    
+    if(corresclassezoo[1]=="Copepodes"){
+      cczoo2<-("darkorchid1")
+      int2<-cbind.data.frame(mmmzoo, cczoo2)
+      resltat2<-rbind.data.frame(resltat2,int2)
+    }
+    
+    if(corresclassezoo[1]=="Rotiferes"){
+      cczoo2<-c("skyblue3")
+      int2<-cbind.data.frame(mmmzoo, cczoo2)
+      resltat2<-rbind.data.frame(resltat2,int2)
+    }
+    resultat2zoo<-as.data.frame(resltat2)
+}
+sommetotalezoo<-sum(c(resultat2zoo$sommetax))
+pourcentagezoo<-resultat2zoo$sommetax/sommetotalezoo*100
+resultat2zoo<-cbind(resultat2zoo, pourcentagezoo)
+newzoo<- resultat2zoo[order(resultat2zoo$sommetax, decreasing = T),]#tri par ordre croissant selon le biovol
+  
+azoo<-as.data.frame(newzoo [1:3,])#on prend les 3 premiéres lignes
+yihazoo2<-as.character(azoo$cczoo2)
+  
+maxiszoo<-(azoo$nomzoo3)
+prctgzoo<-(azoo$pourcentagezoo)
+}
+
+# Stat sur les 20 lacs
+ min_ab20lacs <-  max_ab20lacs <- min_ric20lacs <-  max_ric20lacs <- min_E20lacs <-  max_E20lacs <- min_H20lacs <-  max_H20lacs <- c()
+  for (i in ((year(min(date_tab_comp_p,na.rm=T))):(year(max(date_tab_comp_p,na.rm=T))))){
+    annee_zoo <- subset(tab_comparaison_plancton,tab_comparaison_plancton$année == i )
+    # Abondance
+    ab_min_annee <- min(annee_zoo$Abondance_zoo, na.rm=TRUE) 
+    ab_max_annee <- max(annee_zoo$Abondance_zoo, na.rm=TRUE) 
+    min_ab20lacs <- c(min_ab20lacs, ab_min_annee)
+    max_ab20lacs <- c(max_ab20lacs,  ab_max_annee)
+    # Richesse
+    ric_min_annee <- min(annee_zoo$Richesse_zoo, na.rm=TRUE) 
+    ric_max_annee <- max(annee_zoo$Richesse_zoo, na.rm=TRUE) 
+    min_ric20lacs <- c(min_ric20lacs, ric_min_annee)
+    max_ric20lacs <- c(max_ric20lacs,  ric_max_annee)
+    # Diversité
+    h_min_annee <- min(annee_zoo$Diversité.de.Shanon_zoo, na.rm=TRUE) 
+    h_max_annee <- max(annee_zoo$Diversité.de.Shanon_zoo, na.rm=TRUE) 
+    min_H20lacs <- c(min_H20lacs, h_min_annee)
+    max_H20lacs <- c(max_H20lacs,  h_max_annee)
+    # Equitabilité
+    E_min_annee <- min(annee_zoo$Equitabilité.de.Piélou_zoo, na.rm=TRUE) 
+    E_max_annee <- max(annee_zoo$Equitabilité.de.Piélou_zoo, na.rm=TRUE) 
+    min_E20lacs <- c(min_E20lacs, E_min_annee)
+    max_E20lacs <- c(max_E20lacs,  E_max_annee)
+  }
+
+# Tableau année précédentes
+colnames(tab_phyto_espece) <- c("Année","Richesse","Classe majoritaire","espèce majoritaire")
+ 
+ 
+tab_zoo_espece <- tab_comparaison_plancton_lac[3:8]
+tab_zoo_espece <- tab_zoo_espece [- (2:4)]
+tab_zoo_espece <- cbind(tab_comparaison_plancton_lac$année, tab_zoo_espece)
+tab_zoo_espece <- na.omit(tab_zoo_espece)
+colnames(tab_zoo_espece) <- c("Année","Richesse","Classe majoritaire","espèce majoritaire")
+
+```
+
+
+
+### Résultats `r p`
+```{r histogramme_zoo}
+if ((nrow(tabzoo_cl)!= 0)== TRUE) {
+  couleurs<-NULL
+  coul<-NULL
+  
+  par(mar=c(7,7,4,6))#marge=bas.gauche.haut.droit
+  barplot(tabzooordo$somme,space=0,las=2,col=yihazoo,main="Zooplancton",axes=F, cex.names = 0.8,col.axis= "#313330", ylab="Nombre d'individus par m²")
+  axis(side=2,pos=0,las=2,col.axis="#313330")
+    
+  par(mar=c(0,0,0,0))
+  plot.window(c(0,10),c(0,10))
+    
+  text(x=6.5,y=2,pos=3,paste0("Nombre d'espèces dénombrées au microscope : ",richesse_zoo), cex=0.8)
+ 
+   # espèces majoriatires
+  text(x=6.16,y=1.5,pos=3, "espèces majoritaires : ", cex=0.8)
+  text(x=8,y=1,pos=3, paste("-",maxiszoo[1],":",round(prctgzoo[1],1),"%"), cex=0.8, col=yihazoo2[1])
+    
+  if(is.na(prctgzoo[2])==F){
+      if(prctgzoo[2]>1) {text(x=8,y=0.5,pos=3, paste("-",maxiszoo[2],":",round(prctgzoo[2],1),"%"), cex=0.8,col=yihazoo2[2])}
+      if(prctgzoo[2]<1) {text(x=8,y=0.5,pos=3, paste("-",maxiszoo[2],": < 1%"), cex=0.8,col=yihazoo2[3])}
+  }
+  
+  if(is.na(prctgzoo[3])==F){
+      if(prctgzoo[3]>1) {text(x=8,y=0,pos=3, paste("-",maxiszoo[3],":",round(prctgzoo[3],1),"%"), cex=0.8,col=yihazoo2[3])}
+      if(prctgzoo[3]<1) {text(x=8,y=0,pos=3, paste("-",maxiszoo[3],": < 1%"), cex=0.8,col=yihazoo2[3])}
+  }
+    
+  #text(x=0.1, y=7, pos =2, "Nombre d'individus par mB2", srt=90, cex=1.2,col="#313330")
+    
+  rasterImage(imgzoo,xleft=0.1, ybottom=8.5, xright=1.5, ytop=10.2)
+  legend(x=0.5,y=2,paste(tabzooordo$nomzoo2, ":",tabzooordo$comptezoo," espèce(s)"),col=yihazoo, text.col=yihazoo, lwd=2, bty="n", cex=0.7)
+}
+
+```
+
+
+### Commentaire `r p`
+
+```{r comment_zoo}
+# comm1 -> zoo1
+# pour le comm2
+if ((nrow(tabzoo_cl)!= 0)== TRUE) {
+  if(is.na(richesse_zoo)==FALSE){
+    zoo2 <- paste0("L'utilisation du filet à plancton sur toute la colonne d'eau a permis d'identifier ",richesse_zoo," espèces différentes. Deux indices ont été calculés, la diversité de Shannon (H') : ",round(diversite_zoo,2)," et l'équitabilité (E) : ",round(equita_zoo,2),".")
+}
+}else {
+  zoo1 <- paste0("Pas de données de zooplancton disponible en ",annee,".")
+  zoo2 <- paste("")
+}
+  
+```
+`r zoo1`  
+
+`r zoo2`  
+
+ **Années précédentes: **
+```{r results="asis"}
+knitr::kable(tab_zoo_espece, row.names = FALSE, align = 'c')
+```
+
+
+Row {data-width=500}{.tabset .tabset-fade}
+-------------------------------------
+
+### Richesse et abondance
+```{r zoo_richesse , fig.show = "hold", out.width ="35%"}
+richesse_z <- ggplot(tab_comparaison_plancton_lac, aes(x=année), width=4, height =4) +
+  geom_point(aes(y= min_ric20lacs), color='sienna1', shape= "-", size = ep_tiret) + 
+  geom_point(aes(y= max_ric20lacs), color='sienna3', shape="-", size = ep_tiret) +
+  geom_point(aes(y= Richesse_zoo), color='sienna4', shape= 16, size = 3) + 
+  scale_y_continuous(name ="Nombre d'espèce différente") +
+  annotate("text", x=5.5, xend=8, y=min(min_ric20lacs), label="Min sur les 24 lacs", color="sienna1") +
+  annotate("text", x=5.5,  y=max(max_ric20lacs), label="Max sur les 24 lacs",color="sienna3")+
+  labs(title = "Evolution de la richesse ", subtitle = "Nombre de taxon- zooplancton") +
+  theme(
+    axis.title = element_text(size = 12), 
+    axis.title.x = element_blank(),
+    axis.title.y.left=element_text(color="sienna4", size=14),
+    axis.text.y=element_text(face = "bold",color="sienna4",vjust = 0, size=12),
+    axis.text.x = element_text(face = "bold",  angle = 40, vjust = 0.25, size=12),
+    plot.title = element_text(size=11, face="bold"),
+    plot.subtitle = element_text(size=9 )
+  )
+abondance_z <- ggplot(tab_comparaison_plancton_lac, aes(x=année), width=4, height =4) +
+  geom_point(aes(y= min_ab20lacs), color='indianred1', shape= "-", size = ep_tiret) + 
+  geom_point(aes(y= max_ab20lacs), color='indianred3', shape="-", size = ep_tiret) +
+  geom_point(aes(y= Abondance_zoo), color='indianred4', shape= 16, size = 3) + 
+  scale_y_continuous(name ="Abondance par mL") +
+  annotate("text", x=5.5, xend=8, y=min(min_ab20lacs), label="Min sur les 24 lacs", color="indianred1") +
+  annotate("text", x=5.5,  y=max(max_ab20lacs), label="Max sur les 24 lacs",color="indianred3")+
+  labs(title = "Evolution de l'abondance ", subtitle = "Nombre d'individu par mL") +
+  theme(
+    axis.title = element_text(size = 12), 
+    axis.title.x = element_blank(),
+    axis.title.y.left=element_text(color="indianred4", size=14),
+    axis.text.y=element_text(face = "bold",color="indianred4",vjust = 0, size=12),
+    axis.text.x = element_text(face = "bold",  angle = 40, vjust = 0.25, size=12),
+    plot.title = element_text(size=11, face="bold"),
+    plot.subtitle = element_text(size=9 )
+  )
+
+# afficher les graphes
+richesse_z
+abondance_z
+
+```
+
+
+### Indices de diversité
+```{r zoo_diversite , fig.show = "hold", out.width ="35%"}
+diversite_z <- ggplot(tab_comparaison_plancton_lac, aes(x=année), width=4, height =4) +
+  geom_point(aes(y= min_H20lacs), color='goldenrod1', shape= "-", size = ep_tiret) + 
+  geom_point(aes(y= max_H20lacs), color='goldenrod3', shape="-", size = ep_tiret) +
+  geom_point(aes(y= Diversité.de.Shanon_zoo), color='goldenrod4', shape= 16, size = 3) + 
+  scale_y_continuous(name ="Diversité - indice de Shannon") +
+  annotate("text", x=5.5, xend=8, y=min(min_H20lacs), label="Min sur les 24 lacs", color="goldenrod1") +
+  annotate("text", x=5.5,  y=max(max_H20lacs), label="Max sur les 24 lacs",color="goldenrod3")+
+  labs(title = "Evolution de la diversité (H') ", subtitle = "Indice de Shanon") +
+  theme(
+    axis.title = element_text(size = 12), 
+    axis.title.x = element_blank(),
+    axis.title.y.left=element_text(color="goldenrod4", size=14),
+    axis.text.y=element_text(face = "bold",color="goldenrod4",vjust = 0, size=12),
+    axis.text.x = element_text(face = "bold",  angle = 40, vjust = 0.25, size=12),
+    plot.title = element_text(size=11, face="bold"),
+    plot.subtitle = element_text(size=9 )
+  )
+equitabilite_z <- ggplot(tab_comparaison_plancton_lac, aes(x=année), width=4, height =4) +
+  geom_point(aes(y= min_E20lacs), color='springgreen3', shape= "-", size = ep_tiret) + 
+  geom_point(aes(y= max_E20lacs), color='springgreen4', shape="-", size = ep_tiret) +
+  geom_point(aes(y= Equitabilité.de.Piélou_zoo), color='palegreen4', shape= 16, size = 3) + 
+  scale_y_continuous(name ="Equitabilité - indice de Piélou", limits = c(0,1)) +
+  annotate("text", x=5.5, xend=8, y=min(min_E20lacs), label="Min sur les 24 lacs", color="springgreen3") +
+  annotate("text", x=5.5,  y=max(max_E20lacs), label="Max sur les 24 lacs",color="springgreen4")+
+  labs(title = "Evolution de l'équitabilité (E) ", subtitle = "Indice de Piélou") +
+  theme(
+    axis.title = element_text(size = 12), 
+    axis.title.x = element_blank(),
+    axis.title.y.left=element_text(color="palegreen4", size=14),
+    axis.text.y=element_text(face = "bold",color="palegreen4",vjust = 0, size=12),
+    axis.text.x = element_text(face = "bold",  angle = 40, vjust = 0.25, size=12),
+    plot.title = element_text(size=11, face="bold"),
+    plot.subtitle = element_text(size=9 )
+  )
+
+diversite_z
+equitabilite_z
+```
+
+
+Etat trophique 
+=====================================
+
+
+Row 
+-------------------------------------
+### Secchi et zone euphotique
+
+```{r zone_euphotique}
+
+if(is.na(transp)==FALSE){
+   if(euph < profondeur_max_lac){
+      comm_zone_euph <- paste0("Profondeur de la zone euphotique le ",date_mission," : ", round(euph,1), "m.")
+   }
+  if(euph  >= profondeur_max_lac ){
+    comm_zone_euph <- paste("Le ",date_mission,", la zone euphotique s'étend sur toute la colonne d'eau du lac.")
+  }
+}
+if(is.na(transp)==TRUE){
+  comm_zone_euph <- paste("Pas de données sur la zone euphotique en ",p,".")
+}
+```
+
+
+```{r zone_euph_annees_precedentes , fig.show = "hold", out.width ="35%"}
+
+zone_euph_graphe <- ggplot(tab_comparaison_base_lac, aes(x=année), width=4, height =4) +
+  geom_point(aes(y= profondeur_max_lac), color='grey25', shape= "-", size = 10) +
+   geom_bar(stat="identity",aes(y= prof_zone_euph), color='snow4',fill="palegoldenrod", size = 0.3) + 
+  annotate("text", x=5,  y=5, label="Zone euphotique", color="snow4") +
+  annotate("text", x=5,  y=profondeur_max_lac, label="Profondeur du lac",color="grey25") +
+  scale_y_reverse(name="Profondeur de la zone euphotique") +
+  scale_x_discrete(name="Année de mesure") +
+  labs(title = "Profondeur de la zone euphotique ") +
+  theme(
+    axis.title = element_text(size = 12),
+    axis.title.x = element_blank(),
+    axis.title.y.left=element_text(color="snow4"),
+    axis.text.y=element_text(face = "bold",color="snow4",vjust = 0, size=12),
+    axis.text.x = element_text(face = "bold",  angle = 40, vjust = 0.25, size=12),
+    plot.title = element_text(size=11, face="bold")
+  ) + labs(caption = "ATTENTION : Ce sont des données ponctuelles, mesurées une seule fois par an") +
+ geom_point(aes(y= prof_secchi), color='darkorange', shape= "+", size = 12) +   # ajout point pour données Secchi
+ annotate("text", x=2,  y=tab_comparaison_base_lac$prof_secchi[1]-1, label="Mesure Disque Secchi", color="darkorange")+
+ labs(caption = comm_zone_euph)
+  
+zone_euph_graphe
+
+```
+
+
+
+### Concentration en chlorophylle-a
+
+```{r prépa data chloro }
+# Sélection du lac et de l'année pour le fichier chloro
+tabchloro <- chloro[chloro$nom.du.site %in% nom]
+tabchloro <- subset(tabchloro, tabchloro$nom.de.la.variable == "chlorophylle a scor-unesco" | tabchloro$nom.de.la.variable == "chlorophylle a strickland-parsons" )  # pour enlever chloro C, carotenoide, ....
+
+chloro_annee <- subset(tabchloro,year(as.Date(strptime(date.prélèvement, "%d/%m/%Y"))) == p)
+chlo_annee_p <-  round(mean(chloro_annee$valeur),2)
+
+
+# Pour tous les lacs -
+date_tab_chimie <- as.Date(strptime(tab_comparaison_chimie_lac$année, "%Y"))
+min_chlo20lacs <-  max_chlo20lacs <- c()
+  
+for (i in (max(2014, (year(min(date_tab_chimie,na.rm=T)))) :(year(max(date_tab_chimie,na.rm=T))))){ # 1ère données en 2014 (pour simplifier!)
+    chlo_annee <- subset(tab_comparaison_chimie,tab_comparaison_chimie$année == i )
+    min_annee <- min(chlo_annee$chloro_µg.l, na.rm=TRUE) 
+    max_annee <- max(chlo_annee$chloro_µg.l, na.rm=TRUE) 
+    min_chlo20lacs <- c(min_chlo20lacs, min_annee)
+    max_chlo20lacs <- c(max_chlo20lacs, max_annee)
+  }
+
+```
+
+
+```{r comment valeur chloro}
+# Valeur chlorophylle
+if(is.na(chlo_annee_p)==FALSE){
+  comm_chloro <- paste0("Le ",date_mission,", la concentration en chloro-a est de : ",chlo_annee_p," µg/l.")
+} else{
+  comm_chloro <- paste("Pas de données de chlorophylle-a cette année.")
+}
+```
+
+```{r chloro , fig.show = "hold", out.width ="35%"}
+
+if(is.na(chlo_annee_p)==FALSE){
+    info <- ""
+    } else{
+      info <- "Pas de données disponibles"
+    }
+
+tab_comparaison_chloro_lac <- tab_comparaison_chimie_lac %>% filter(année != 2013) # pour bien commencer en 2014
+
+
+chloro_graphe <- ggplot(tab_comparaison_chloro_lac, aes(x=année, y=chloro_µg.l), width=4, height =4) +
+  geom_point(aes(y= min_chlo20lacs), color='darkolivegreen3', shape= "-", size = 12) + 
+  geom_point(aes(y= max_chlo20lacs), color='darkolivegreen4', shape="-", size = 12) +
+  annotate("text", x=3.8,  y= 0, label="Min sur les 24 lacs", color="darkolivegreen3") + 
+  annotate("text", x=3.8, y=max(max_chlo20lacs)+0.6,label="Max sur les 24 lacs",color="darkolivegreen4") +
+  annotate("text", x=2, y=6,label=info, color="black", size = 3.5)+
+ geom_point(aes(y= chloro_µg.l), color='forestgreen', shape= 16, size = 3) +
+  scale_y_continuous(name="Concentration en chlorphylle-a (µg/l)", limits = c(0,18)) +
+  labs(#title = "Concentration en chlorophylle-a (µg/l)"
+    subtitle= "prélèvement dans la zone euphotique") +
+  theme(
+    axis.title = element_text(size = 12),
+    axis.title.x = element_blank(),
+    axis.title.y.left=element_text(color="forestgreen"),
+    axis.text.y=element_text(face = "bold",color="forestgreen",vjust = 0, size=12),
+    axis.text.x = element_text(face = "bold",  angle = 40, vjust = 0.25, size=12),
+    plot.title = element_text(size=11, face="bold"),
+    plot.subtitle = element_text(size=9 )
+  )+
+  labs(caption = comm_chloro)
+
+chloro_graphe
+```
+
+
+
+
+```{r indice de carlson }
+# pour plus tard ! 
+# calcul d'indice type indice de Carlson ?
+  
+```
+
+
+
+Row 
+-------------------------------------
+
+### Nitrates
+```{r Azote N03 et Ntot , fig.show = "hold", out.width ="35%"}
+
+chimie$annee <- year(as.Date(chimie$date.de.prélèvement, "%d/%m/%Y"))
+chimie_surface <- subset(chimie, profondeur.minimum..m.== 0 | profondeur.minimum..m.== 0.5 | profondeur.minimum..m.== 0.3 | profondeur.minimum..m.== 1| profondeur.minimum..m.== 0.4)
+
+# Sélection du paramètre NO3
+parametre <- "Nitrates" # ou nitrates ?
+
+tab_parametre <- chimie_surface %>% 
+  filter(nom.du.site == nom) %>% 
+  filter(paramètre == parametre) %>% 
+  filter(unité == "mg(NO3)/l")
+tab_parametre$valeur.du.résultat <- as.numeric(tab_parametre$valeur.du.résultat)
+tab_parametre$date.de.prélèvement <- as.Date(tab_parametre$date.de.prélèvement, tryFormats = c("%d/%m/%Y")) 
+
+# NO3 seulement
+seuil_param_TB <- 132.8 ### issu du travail du PNM
+seuil_param_B <- 298.2 
+seuil_param_M <- 398.4 
+
+tab_parametre$valeur.du.résultat <- tab_parametre$valeur.du.résultat *1000 # changement d'unité
+tab_parametre$unité <- "µg/L"
+
+NO3 <- ggplot(tab_parametre, aes (y=valeur.du.résultat, x=annee)) +
+  geom_point(col = "tomato4", cex=5) +
+  scale_x_continuous(breaks = seq(2013, 2024 , by = 2)) +
+  scale_y_continuous(breaks = seq(100, 1000 , by = 100)) +
+  gghighlight(valeur.du.résultat > seuil_param_B, unhighlighted_colour ="tomato3", label_key = annee) +
+  labs( subtitle= "prélèvement dans la zone euphotique",
+       y = paste0("Concentration en ", parametre,"- en µg/l")) +
+  
+  theme(
+      axis.title = element_text(size = 12),
+      element_text(face="bold", size=12),
+      plot.title = element_text(size=11, face="bold"),
+      plot.subtitle = element_text(size=9 ),
+      axis.title.y.left=element_text(color="tomato4"),
+      axis.text.y=element_text(face = "bold",color="tomato4",vjust = 0, size=12),
+      axis.title.x = element_blank(),
+      axis.text.x = element_text(face = "bold",  angle = 40, vjust = 0.25, size=12)) +
+
+  geom_hline(yintercept = seuil_param_TB, linetype="dashed",color = 'purple3')+
+  geom_hline(yintercept = seuil_param_B, linetype="dashed",color = 'purple3')+
+  geom_hline(yintercept = seuil_param_M, linetype="dashed",color = 'purple3')+
+  geom_text(x=2022.5, y=seuil_param_TB-50, label="Très bon état ", cex=4,  color = "purple3")+
+  geom_text(x=2022.5, y=seuil_param_B-50, label=" Bon état ", cex=4,  color = "purple3") +
+  geom_text(x=2022.5, y=seuil_param_M-50, label=" Etat moyen ", cex=4,  color = "purple3")+
+  labs(caption = "Les seuils sont un premier essai pour qualifier les données des lacs d'altitude.")
+  
+
+
+NO3
+
+#scaleFactor <- max(as.numeric(tab_comparaison_base_lac$Temp.surface)) / max(as.numeric(tab_comparaison_base_lac$Prof.thermocline)) # Astuce pour mettre 2 axes en y
+```
+
+
+### Phosphore total
+```{r Phosphore tot et PO4, fig.show = "hold", out.width ="35%"}
+
+# Sélection du paramètre 
+parametre <- c("Phosphore Total", "Phosphore total filtré")
+
+tab_parametre <- chimie_surface %>% 
+  filter(nom.du.site == nom) %>% 
+  filter(paramètre %in% parametre)%>% 
+  filter(unité == "milligramme par litre")
+
+tab_parametre$valeur.du.résultat <- as.numeric(tab_parametre$valeur.du.résultat)
+tab_parametre$date.de.prélèvement <- as.Date(tab_parametre$date.de.prélèvement, tryFormats = c("%d/%m/%Y")) 
+
+seuil_param_TB <- 6 ### issu du travail du PNM
+seuil_param_B <- 9 
+seuil_param_M <- 12 
+
+tab_parametre$valeur.du.résultat <- tab_parametre$valeur.du.résultat *1000 # changement d'unité
+tab_parametre$unité <- "µg/L"
+
+
+Ptot <- ggplot(tab_parametre, aes (y=valeur.du.résultat, x=annee)) +
+  geom_point(col = "tomato", cex=5) +
+  scale_x_continuous(breaks = seq(2013, 2023 , by = 2)) +
+  scale_y_continuous(breaks = seq(0, 15 , by = 2))  +
+ # gghighlight(valeur.du.résultat > seuil_param_B, unhighlighted_colour = "tomato4", label_key = annee)+
+  labs( subtitle= "prélèvement dans la zone euphotique",
+       y = paste0("Concentration en ", parametre,"- en µg/l")) +
+  ylim(0,15) +
+  
+  theme(
+      axis.title = element_text(size = 12),
+      element_text(face="bold", size=12),
+      plot.title = element_text(size=11, face="bold"),
+      plot.subtitle = element_text(size=9 ),
+      axis.title.y.left=element_text(color="tomato"),
+      axis.text.y=element_text(face = "bold",color="tomato",vjust = 0, size=12),
+      axis.title.x = element_blank(),
+      axis.text.x = element_text(face = "bold",  angle = 40, vjust = 0.25, size=12)) +
+  
+  geom_hline(yintercept = seuil_param_TB, linetype="dashed",color = 'purple4')+
+  geom_hline(yintercept = seuil_param_B, linetype="dashed",color = 'purple4')+
+  geom_hline(yintercept = seuil_param_M, linetype="dashed",color = 'purple4') +
+  geom_text(x=2022, y=seuil_param_TB-1, label="Très bon état ", cex=4,  color = "purple4")+
+  geom_text(x=2022, y=seuil_param_B-1, label="Bon état ", cex=4,  color = "purple4") +
+  geom_text(x=2022, y=seuil_param_M-1, label="Etat moyen ", cex=4,  color = "purple4") +
+  labs(caption = "Ces seuils ont été obtenus à partir des données du réseau « Lacs Sentinelles »\nau cours des 10 dernières années (cf. travail sur les indicateurs du Parc national du Mercantour :\n www.lacs-sentinelles.org/fr/ressources/etat-conservation-lacs-altitude-parc-national-mercantour.)")
+
+
+Ptot
+  
+```
+
+
